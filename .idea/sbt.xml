@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ScalaSbtSettings">
+    <option name="customLauncherPath" />
+    <option name="customVMPath" />
+    <option name="sbtEnvironment">
+      <map>
+        <entry key="BOT_NAME" value="BeautySalonBot" />
+        <entry key="BOT_TOKEN" value="7803772137:AAEeG0QPJ7_absMbaZTuZMEGwIYSiRwrqws" />
+      </map>
+    </option>
+  </component>
+</project>

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  barber-server:
+    build: .
+    container_name: barber-server
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://barber-db:5432/barber_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+    depends_on:
+      - barber-db
+    networks:
+      - app-network
+
+  barber-db:
+    image: postgres:16.1
+    container_name: barber-db
+    ports:
+      - "6642:5432"
+    environment:
+      - POSTGRES_DB=barber_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
