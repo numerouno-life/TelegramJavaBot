@@ -20,6 +20,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+import static ru.util.BotConstants.*;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -37,17 +39,17 @@ public class TextMessageHandler {
         // Проверяем состояние пользователя
         String state = appointmentService.getUserState(chatId);
 
-        if ("/start".equalsIgnoreCase(text)) {
+        if (CMD_START.equalsIgnoreCase(text) || CMD_BEGIN.equalsIgnoreCase(text)) {
             sendWelcome(chatId);
             return;
         }
 
-        if ("AWAITING_NAME".equals(state)) {
+        if (STATE_AWAITING_NAME.equals(state)) {
             handleUserName(chatId, text, message.getMessageId());
             return;
         }
 
-        if ("AWAITING_PHONE".equals(state)) {
+        if (STATE_AWAITING_PHONE.equals(state)) {
             handleUserPhone(chatId, text, message.getMessageId());
             return;
         }
@@ -58,11 +60,12 @@ public class TextMessageHandler {
 
     private void sendWelcome(Long chatId) {
         String welcome = """
-                👋 Добро пожаловать в салон красоты *AURA*!
+                👋 Добро пожаловать в салон красоты *SH*!
                 
                 Вы можете:
                 • Записаться на стрижку
-                • Посмотреть свои записи
+                • Посмотреть свои актуальные записи
+                • Посмотреть историю записей
                 • Узнать контакты
                 """;
         notificationService.sendMainMenu(chatId, welcome);
@@ -167,7 +170,6 @@ public class TextMessageHandler {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup(rows);
         notificationService.sendOrEditMessage(chatId, messageId, "Выберите дату записи:", markup);
     }
-
 
 
 }

@@ -7,14 +7,17 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 
 import java.util.List;
 
+import static ru.util.BotConstants.*;
+
 @Component
 public class KeyboardFactory {
 
     public InlineKeyboardMarkup mainMenu() {
         return new InlineKeyboardMarkup(List.of(
-                row("💇 Записаться", "book_appointment"),
-                row("📋 Мои записи", "my_appointments"),
-                row("📞 Контакты", "contacts")
+                row(CMD_BOOK, "book_appointment"),
+                row(CMD_MY_APPOINTMENTS, "my_appointments"),
+                row(CMD_HISTORY, "history"),
+                row(CMD_CONTACTS, "contacts")
         ));
     }
 

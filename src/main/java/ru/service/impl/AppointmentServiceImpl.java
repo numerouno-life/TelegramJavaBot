@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.error.exception.AppointmentNotFoundException;
 import ru.model.Appointment;
 import ru.model.enums.StatusAppointment;
 import ru.repository.AppointmentRepository;
@@ -58,7 +59,9 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     public Appointment createAppointment(Appointment appointment) {
         Appointment saved = appointmentRepository.save(appointment);
+        saved.setStatus(StatusAppointment.CONFIRMED);
         notificationScheduler.scheduleNotifications(saved);
+        log.info("Запись создана: {}", saved);
         return saved;
     }
 
@@ -66,8 +69,17 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional
     public void cancelAppointment(Long appointmentId) {
-        appointmentRepository.deleteById(appointmentId);
+        Appointment appointment = appointmentRepository.findById(appointmentId).orElseThrow(
+                () -> new AppointmentNotFoundException("Запись c id " + appointmentId + " не найдена"));
+        if (appointment.getStatus() == StatusAppointment.CANCELED) {
+            log.warn("Попытка отменить уже отмененную запись: {}", appointmentId);
+            return;
+        }
+        // Меняем статус записи
+        appointment.setStatus(StatusAppointment.CANCELED);
+        appointmentRepository.save(appointment);
         notificationScheduler.cancelNotifications(appointmentId);
+        log.info("Запись отменена: {}", appointmentId);
     }
 
     // Получить записи клиента
@@ -81,7 +93,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public Appointment rescheduleAppointment(Long appointmentId, LocalDateTime newDateTime) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new IllegalArgumentException("Запись не найдена"));
+                .orElseThrow(() -> new AppointmentNotFoundException("Запись c id " + appointmentId + " не найдена"));
 
         // Отменить старую запись
         notificationScheduler.cancelNotifications(appointmentId);
@@ -94,6 +106,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         notificationScheduler.scheduleNotifications(saved);
         return saved;
     }
+
     // Проверить доступность времени
     @Override
     public boolean isTimeSlotAvailable(LocalDateTime dateTime) {
@@ -143,4 +156,37 @@ public class AppointmentServiceImpl implements AppointmentService {
     public String getPendingName(Long chatId) {
         return pendingNames.get(chatId);
     }
+
+    @Override
+    public Appointment findById(Long appointmentId) {
+        return appointmentRepository.findById(appointmentId).orElseThrow(() ->
+                new AppointmentNotFoundException("Запись с id " + appointmentId + " не найдена"));
+    }
+
+    // Получить активные записи клиента
+    @Override
+    @Transactional(readOnly = true)
+    public List<Appointment> getActiveAppointments(Long chatId) {
+        return appointmentRepository.findByClientChatId(chatId).stream()
+                .filter(app -> app.getStatus() != StatusAppointment.CANCELED &&
+                        app.getDateTime().isAfter(LocalDateTime.now()))
+                .toList();
+    }
+
+    // Получить прошедшие записи клиента
+    @Override
+    @Transactional(readOnly = true)
+    public List<Appointment> getPastAppointments(Long chatId) {
+        return appointmentRepository.findByClientChatId(chatId).stream()
+                .filter(app -> app.getDateTime().isBefore(LocalDateTime.now())
+                        || app.getStatus() == StatusAppointment.CANCELED)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public Appointment updateAppointment(Appointment appointment) {
+        return appointmentRepository.save(appointment);
+    }
+
 }
