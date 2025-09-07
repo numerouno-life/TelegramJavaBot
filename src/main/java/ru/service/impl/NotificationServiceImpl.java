@@ -7,6 +7,7 @@ import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
@@ -58,6 +59,26 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public Message sendMessageAndReturn(Long chatId, String text, InlineKeyboardMarkup replyMarkup) {
+        SendMessage msg = SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .replyMarkup(replyMarkup)
+                .build();
+        try {
+            return telegramClient.execute(msg);
+        } catch (TelegramApiException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    //Универсальный метод "с кнопкой внизу"
+    public void sendMessageWithBackButton(Long chatId, String text, String buttonText, String callbackData) {
+        InlineKeyboardMarkup markup = keyboardFactory.backButton(buttonText, callbackData);
+        sendMessage(chatId, text, markup);
+    }
+
+    @Override
     public void deleteMessage(Long chatId, Integer messageId) {
         try {
             telegramClient.execute(new DeleteMessage(chatId.toString(), messageId));
@@ -74,7 +95,8 @@ public class NotificationServiceImpl implements NotificationService {
                 🕒 Часы работы: 10:00 - 20:00
                 💻 Сайт: https://yandex.ru/maps/org/aura/137741913962/?ll=49.560800%2C54.236732&z=16
                 """;
-        sendOrEditMessage(chatId, null, contacts, null);
+        sendOrEditMessage(chatId, null,
+                contacts, keyboardFactory.backButton("🏠 В меню", "back_to_menu"));
     }
 
     @Override

@@ -40,4 +40,16 @@ public interface AppointmentService {
     List<Appointment> getPastAppointments(Long chatId);
 
     Appointment updateAppointment(Appointment appointment);
+
+    void setPendingMessageId(Long chatId, Integer messageId);
+
+    Integer getPendingMessageId(Long chatId);
+
+    void clearPendingMessageId(Long chatId);
+
+    int getHistoryPage(Long chatId);
+
+    void setHistoryPage(Long chatId, int page);
+
+    void clearHistoryPage(Long chatId);
 }

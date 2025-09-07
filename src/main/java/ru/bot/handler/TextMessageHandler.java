@@ -6,13 +6,12 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import ru.model.Appointment;
 import ru.model.enums.StatusAppointment;
 import ru.scheduler.AppointmentNotificationScheduler;
 import ru.service.AppointmentService;
 import ru.service.NotificationService;
+import ru.util.KeyboardFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,6 +29,7 @@ public class TextMessageHandler {
     private final AppointmentService appointmentService;
     private final NotificationService notificationService;
     private final AppointmentNotificationScheduler notificationScheduler;
+    private final KeyboardFactory keyboardFactory;
 
     public void handleTextMessage(Update update) {
         Message message = update.getMessage();
@@ -72,19 +72,35 @@ public class TextMessageHandler {
     }
 
     private void handleUserName(Long chatId, String name, Integer messageId) {
-        // Удаляем сообщение с именем
+        // Удаляем предыдущее сообщение с выбором времени
+        Integer pendingMessageId = appointmentService.getPendingMessageId(chatId);
+        if (pendingMessageId != null) {
+            notificationService.deleteMessage(chatId, pendingMessageId);
+            appointmentService.clearPendingMessageId(chatId);
+        }
+
+        // Удаляем сообщение с именем пользователя
         notificationService.deleteMessage(chatId, messageId);
 
         appointmentService.setPendingName(chatId, name);
         appointmentService.setUserState(chatId, "AWAITING_PHONE");
 
-        notificationService.sendOrEditMessage(chatId, null,
+        // Отправляем новое сообщение и сохраняем его ID
+        Message sentMessage = notificationService.sendMessageAndReturn(chatId,
                 "Спасибо, *%s*! Теперь введите ваш номер телефона 📱".formatted(name),
-                null
+                keyboardFactory.backButton("⬅️ Назад", "back_to_dates")
         );
+
+        // Сохраняем ID сообщения бота, а не пользователя
+        appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
     }
 
     private void handleUserPhone(Long chatId, String phone, Integer messageId) {
+        Integer pendingMessageId = appointmentService.getPendingMessageId(chatId);
+        if (pendingMessageId != null) {
+            notificationService.deleteMessage(chatId, pendingMessageId);
+            appointmentService.clearPendingMessageId(chatId);
+        }
         // Удаляем сообщение с номером
         notificationService.deleteMessage(chatId, messageId);
 
@@ -144,30 +160,19 @@ public class TextMessageHandler {
     }
 
     public void sendDateSelection(Long chatId, Integer messageId) {
-        List<InlineKeyboardRow> rows = new ArrayList<>();
+        notificationService.deleteMessage(chatId, messageId);
+
         LocalDate today = LocalDate.now();
-        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)");
+        List<LocalDate> availableDates = new ArrayList<>();
 
         for (int i = 0; i < 7; i++) {
             LocalDate date = today.plusDays(i);
             if (!appointmentService.getAvailableTimeSlots(date.atStartOfDay()).isEmpty()) {
-                InlineKeyboardButton button = InlineKeyboardButton.builder()
-                        .text(date.format(dateFormat))
-                        .callbackData("date_" + date)
-                        .build();
-                rows.add(new InlineKeyboardRow(button));
+                availableDates.add(date);
             }
         }
 
-        // Кнопка "Назад" к меню
-        rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder()
-                        .text("⬅️ Назад")
-                        .callbackData("back_to_menu")
-                        .build()
-        ));
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup(rows);
+        InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates);
         notificationService.sendOrEditMessage(chatId, messageId, "Выберите дату записи:", markup);
     }
 

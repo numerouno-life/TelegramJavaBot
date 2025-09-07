@@ -28,6 +28,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final Map<Long, LocalDateTime> pendingDates = new ConcurrentHashMap<>();
     private final Map<Long, String> userStates = new ConcurrentHashMap<>(); // Храним состояние пользователя
     private final Map<Long, String> pendingNames = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> pendingMessageId = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> historyPage = new ConcurrentHashMap<>();
 
     @Override
     public void setUserState(Long chatId, String status) {
@@ -189,4 +191,37 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointmentRepository.save(appointment);
     }
 
+    @Override
+    public void setPendingMessageId(Long chatId, Integer messageId) {
+        pendingMessageId.put(chatId, messageId);
+    }
+
+    @Override
+    public Integer getPendingMessageId(Long chatId) {
+        return pendingMessageId.get(chatId);
+    }
+
+    @Override
+    public void clearPendingMessageId(Long chatId) {
+        pendingMessageId.remove(chatId);
+    }
+
+    @Override
+    public void setHistoryPage(Long chatId, int page) {
+        log.debug("setHistoryPage: chatId={}, page={}", chatId, page);
+        historyPage.put(chatId, page);
+        log.debug("Текущее состояние historyPage: {}", historyPage);
+    }
+
+    @Override
+    public int getHistoryPage(Long chatId) {
+        int page = historyPage.getOrDefault(chatId, 0);
+        log.debug("getHistoryPage: chatId={}, page={}", chatId, page);
+        return page;
+    }
+
+    @Override
+    public void clearHistoryPage(Long chatId) {
+        historyPage.remove(chatId);
+    }
 }

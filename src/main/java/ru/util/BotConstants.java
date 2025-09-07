@@ -11,7 +11,6 @@ public class BotConstants {
     public static final String CMD_CONTACTS = "📞 Контакты";
     public static final String CMD_HISTORY = "📝 История записей";
 
-
     public static final String STATE_AWAITING_NAME = "AWAITING_NAME";
     public static final String STATE_AWAITING_PHONE = "AWAITING_PHONE";
 
