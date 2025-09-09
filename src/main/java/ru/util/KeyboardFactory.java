@@ -72,7 +72,7 @@ public class KeyboardFactory {
     public InlineKeyboardMarkup cancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         InlineKeyboardRow row = new InlineKeyboardRow();
-        row.add(createButton("❌ Отменить", "cancel_"));
+        row.add(createButton("❌ Отменить", "cancel_" + appointmentId));
         row.add(createButton("⬅️ Назад", "back_to_menu"));
         rows.add(row);
         return new InlineKeyboardMarkup(rows);

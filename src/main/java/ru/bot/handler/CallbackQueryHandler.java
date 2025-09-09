@@ -101,6 +101,7 @@ public class CallbackQueryHandler {
                     + "\n💇 Мужская стрижка"
                     + "\n📞 " + app.getClientPhoneNumber();
 
+            log.debug("Creating cancel button for appointment id={}", app.getId());
             InlineKeyboardMarkup markup = keyboardFactory.cancelAppointmentButton(
                     app.getId(), app.getDateTime()
             );
