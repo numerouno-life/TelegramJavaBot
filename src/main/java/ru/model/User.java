@@ -3,7 +3,7 @@ package ru.model;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import ru.model.enums.StatusAppointment;
+import ru.model.enums.UserRole;
 
 import java.time.LocalDateTime;
 
@@ -15,24 +15,32 @@ import java.time.LocalDateTime;
 @Builder(toBuilder = true)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
-@Table(name = "appointments")
-/**  Запись  **/
-public class Appointment {
+@Table(name = "users")
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id", referencedColumnName = "telegram_id", nullable = false)
-    User user;
+    @Column(name = "telegram_id", unique = true, nullable = false)
+    Long telegramId;
 
-    @Column(name = "date_time", nullable = false)
-    LocalDateTime dateTime;
+    @Column(name = "username")
+    String username;
+
+    @Column(name = "first_name")
+    String firstName;
+
+    @Column(name = "last_name")
+    String lastName;
+
+    @Column(name = "client_phone_number")
+    String clientPhoneNumber;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    StatusAppointment status;
+    @Column(name = "role", nullable = false)
+    @Builder.Default
+    UserRole role = UserRole.USER;
 
     @Column(name = "created_at", updatable = false, insertable = false)
     LocalDateTime createdAt;

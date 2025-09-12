@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 
-    List<Appointment> findByClientChatId(Long chatId);
+    List<Appointment> findByUserTelegramId(Long telegramId);
 
     List<Appointment> findByDateTime(LocalDateTime dateTime);
 
