@@ -7,10 +7,11 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import ru.model.Appointment;
+import ru.model.User;
 import ru.model.enums.StatusAppointment;
-import ru.scheduler.AppointmentNotificationScheduler;
 import ru.service.AppointmentService;
 import ru.service.NotificationService;
+import ru.service.UserService;
 import ru.util.KeyboardFactory;
 
 import java.time.LocalDate;
@@ -28,8 +29,8 @@ public class TextMessageHandler {
 
     private final AppointmentService appointmentService;
     private final NotificationService notificationService;
-    private final AppointmentNotificationScheduler notificationScheduler;
     private final KeyboardFactory keyboardFactory;
+    private final UserService userService;
 
     public void handleTextMessage(Update update) {
         Message message = update.getMessage();
@@ -82,7 +83,6 @@ public class TextMessageHandler {
         // Удаляем сообщение с именем пользователя
         notificationService.deleteMessage(chatId, messageId);
 
-        appointmentService.setPendingName(chatId, name);
         appointmentService.setUserState(chatId, "AWAITING_PHONE");
 
         // Отправляем новое сообщение и сохраняем его ID
@@ -96,6 +96,7 @@ public class TextMessageHandler {
     }
 
     private void handleUserPhone(Long chatId, String phone, Integer messageId) {
+        User user = userService.updateUserPhone(chatId, phone);
         Integer pendingMessageId = appointmentService.getPendingMessageId(chatId);
         if (pendingMessageId != null) {
             notificationService.deleteMessage(chatId, pendingMessageId);
@@ -114,11 +115,10 @@ public class TextMessageHandler {
 
         try {
             Appointment appointment = Appointment.builder()
-                    .clientChatId(chatId)
-                    .clientName(appointmentService.getPendingName(chatId))
-                    .clientPhoneNumber(phone)
+                    .user(user)
                     .dateTime(dateTime)
-                    .status(StatusAppointment.PENDING)
+                    .status(StatusAppointment.ACTIVE)
+                    .createdAt(LocalDateTime.now())
                     .build();
 
             appointmentService.createAppointment(appointment);
@@ -160,15 +160,20 @@ public class TextMessageHandler {
     }
 
     public void sendDateSelection(Long chatId, Integer messageId) {
-        notificationService.deleteMessage(chatId, messageId);
+        if (messageId != null) {
+            notificationService.deleteMessage(chatId, messageId);
+        }
 
         LocalDate today = LocalDate.now();
         List<LocalDate> availableDates = new ArrayList<>();
 
         for (int i = 0; i < 7; i++) {
             LocalDate date = today.plusDays(i);
-            if (!appointmentService.getAvailableTimeSlots(date.atStartOfDay()).isEmpty()) {
-                availableDates.add(date);
+            if (appointmentService.isWorkingDay(date)) {
+                List<LocalDateTime> slots = appointmentService.getAvailableTimeSlots(date.atStartOfDay());
+                if (!slots.isEmpty()) {
+                    availableDates.add(date);
+                }
             }
         }
 

@@ -48,13 +48,18 @@ public class NotificationServiceImpl implements NotificationService {
         if (messageId == null) {
             sendMessage(chatId, text, replyMarkup);
         } else {
-            EditMessageText edit = EditMessageText.builder()
-                    .chatId(chatId)
-                    .messageId(messageId)
-                    .text(text)
-                    .replyMarkup(replyMarkup)
-                    .build();
-            execute(edit);
+            try {
+                EditMessageText edit = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text(text)
+                        .replyMarkup(replyMarkup)
+                        .build();
+                execute(edit);
+            } catch (Exception e) {
+                log.warn("Не удалось отредактировать сообщение {}, отправляю новое сообщение", messageId, e);
+                sendMessage(chatId, text, replyMarkup);
+            }
         }
     }
 
@@ -80,6 +85,10 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public void deleteMessage(Long chatId, Integer messageId) {
+        if (chatId == null || messageId == null) {
+            log.warn("Не удалось удалить сообщение: chatId или messageId равен null");
+            return;
+        }
         try {
             telegramClient.execute(new DeleteMessage(chatId.toString(), messageId));
         } catch (Exception e) {

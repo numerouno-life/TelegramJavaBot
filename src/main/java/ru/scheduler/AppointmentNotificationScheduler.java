@@ -51,11 +51,11 @@ public class AppointmentNotificationScheduler {
                         appointment.getDateTime().format(DateTimeFormatter.ofPattern("dd.MM.yyyy 'в' HH:mm"))
                 );
                 notificationService.sendMessage(
-                        appointment.getClientChatId(),
+                        appointment.getUser().getTelegramId(),
                         message
                 );
                 log.info("Напоминание отправлено клиенту {} о записи на {}",
-                        appointment.getClientName(), appointment.getDateTime());
+                        appointment.getUser().getUsername(), appointment.getDateTime());
             } catch (Exception e) {
                 log.error("Ошибка при отправке напоминания", e);
             }

@@ -91,7 +91,8 @@ public class CallbackQueryHandler {
     private void showActiveAppointments(Long chatId) {
         List<Appointment> active = appointmentService.getActiveAppointments(chatId);
         if (active.isEmpty()) {
-            notificationService.sendOrEditMessage(chatId, null, "У вас нет активных записей.", null);
+            InlineKeyboardMarkup markup = keyboardFactory.backButton("⬅️ Назад", "back_to_menu");
+            notificationService.sendOrEditMessage(chatId, null, "У вас нет активных записей.", markup);
             return;
         }
 
@@ -99,8 +100,9 @@ public class CallbackQueryHandler {
             String text = "📅 " + app.getDateTime().format(DATE_FORMAT)
                     + " - " + app.getDateTime().format(TIME_FORMAT)
                     + "\n💇 Мужская стрижка"
-                    + "\n📞 " + app.getClientPhoneNumber();
+                    + "\n📞 " + app.getUser().getClientPhoneNumber();
 
+            log.debug("Creating cancel button for appointment id={}", app.getId());
             InlineKeyboardMarkup markup = keyboardFactory.cancelAppointmentButton(
                     app.getId(), app.getDateTime()
             );
@@ -132,7 +134,7 @@ public class CallbackQueryHandler {
             sb.append("📅 ").append(app.getDateTime().format(DATE_FORMAT))
                     .append(" - ").append(app.getDateTime().format(TIME_FORMAT))
                     .append("\n").append(status)
-                    .append("\n📞 ").append(app.getClientPhoneNumber())
+                    .append("\n📞 ").append(app.getUser().getClientPhoneNumber())
                     .append("\n\n");
         }
 
@@ -208,7 +210,7 @@ public class CallbackQueryHandler {
             appointmentService.clearPendingMessageId(chatId);
         }
 
-        textMessageHandler.sendDateSelection(chatId, messageId);
+        textMessageHandler.sendDateSelection(chatId, null);
         appointmentService.clearUserState(chatId);
     }
 }

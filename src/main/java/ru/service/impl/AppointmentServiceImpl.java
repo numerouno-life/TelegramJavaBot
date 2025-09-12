@@ -10,12 +10,14 @@ import ru.model.enums.StatusAppointment;
 import ru.repository.AppointmentRepository;
 import ru.scheduler.AppointmentNotificationScheduler;
 import ru.service.AppointmentService;
+import ru.service.UserSessionService;
+import ru.service.WorkScheduleService;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -23,13 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AppointmentServiceImpl implements AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final AppointmentNotificationScheduler notificationScheduler;
-
-    // Состояния пользователя
-    private final Map<Long, LocalDateTime> pendingDates = new ConcurrentHashMap<>();
-    private final Map<Long, String> userStates = new ConcurrentHashMap<>(); // Храним состояние пользователя
-    private final Map<Long, String> pendingNames = new ConcurrentHashMap<>();
-    private final Map<Long, Integer> pendingMessageId = new ConcurrentHashMap<>();
-    private final Map<Long, Integer> historyPage = new ConcurrentHashMap<>();
+    private final WorkScheduleService workScheduleService;
+    private final UserSessionService userSessionService;
 
     @Override
     public void setUserState(Long chatId, String status) {
@@ -41,19 +38,17 @@ public class AppointmentServiceImpl implements AppointmentService {
             clearUserState(chatId);
             return;
         }
-        userStates.put(chatId, status);
+        userSessionService.setUserState(chatId, status);
     }
 
     @Override
     public String getUserState(Long chatId) {
-        return userStates.get(chatId);
+        return userSessionService.getUserState(chatId);
     }
 
     @Override
     public void clearUserState(Long chatId) {
-        userStates.remove(chatId);
-        pendingDates.remove(chatId);
-        pendingNames.remove(chatId);
+        userSessionService.clearUserState(chatId);
     }
 
     // Сохранить запись
@@ -88,7 +83,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public List<Appointment> getUserAppointments(Long chatId) {
-        return appointmentRepository.findByClientChatId(chatId);
+        return appointmentRepository.findByUserTelegramId(chatId);
     }
 
     @Override
@@ -121,42 +116,45 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public List<LocalDateTime> getAvailableTimeSlots(LocalDateTime date) {
-        List<LocalDateTime> availableSlots = new ArrayList<>();
-        LocalDateTime start = date.withHour(10).withMinute(0);
-        LocalDateTime end = date.withHour(21).withMinute(0); // до 20:00
+        LocalDate localDate = date.toLocalDate();
+        // 1. Проверяем, рабочий ли день
+        if (!workScheduleService.isWorkingDay(localDate)) {
+            return List.of();
+        }
+        // 2. Получаем рабочее время
+        LocalTime[] workTime = workScheduleService.getWorkTimeForDate(localDate);
 
-        while (start.isBefore(end)) {
-            if (start.isBefore(LocalDateTime.now())) {
-                start = start.plusHours(1);
-                continue;
+        LocalTime startTime = workTime[0];
+        LocalTime endTime = workTime[1];
+
+        // 3. Генерируем слоты (по 1 часу)
+        LocalDateTime current = localDate.atTime(startTime);
+        LocalDateTime end = localDate.atTime(endTime);
+        List<LocalDateTime> availableSlots = new ArrayList<>();
+
+        while (current.isBefore(end)) {
+            if (current.isAfter(LocalDateTime.now()) && isTimeSlotAvailable(current)) {
+                availableSlots.add(current);
             }
-            if (isTimeSlotAvailable(start)) {
-                availableSlots.add(start);
-            }
-            start = start.plusHours(1);
+            current = current.plusHours(1);
         }
         return availableSlots;
+    }
+
+    @Override
+    public boolean isWorkingDay(LocalDate date) {
+        return workScheduleService.isWorkingDay(date);
     }
 
     // Временное сохранение даты
     @Override
     public void setPendingDate(Long chatId, LocalDateTime dateTime) {
-        pendingDates.put(chatId, dateTime);
+        userSessionService.setPendingDate(chatId, dateTime);
     }
 
     @Override
     public LocalDateTime getPendingDate(Long chatId) {
-        return pendingDates.get(chatId);
-    }
-
-    @Override
-    public void setPendingName(Long chatId, String name) {
-        pendingNames.put(chatId, name);
-    }
-
-    @Override
-    public String getPendingName(Long chatId) {
-        return pendingNames.get(chatId);
+        return userSessionService.getPendingDate(chatId);
     }
 
     @Override
@@ -169,7 +167,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public List<Appointment> getActiveAppointments(Long chatId) {
-        return appointmentRepository.findByClientChatId(chatId).stream()
+        return appointmentRepository.findByUserTelegramId(chatId).stream()
                 .filter(app -> app.getStatus() != StatusAppointment.CANCELED &&
                         app.getDateTime().isAfter(LocalDateTime.now()))
                 .toList();
@@ -179,7 +177,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public List<Appointment> getPastAppointments(Long chatId) {
-        return appointmentRepository.findByClientChatId(chatId).stream()
+        return appointmentRepository.findByUserTelegramId(chatId).stream()
                 .filter(app -> app.getDateTime().isBefore(LocalDateTime.now())
                         || app.getStatus() == StatusAppointment.CANCELED)
                 .toList();
@@ -193,35 +191,35 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     public void setPendingMessageId(Long chatId, Integer messageId) {
-        pendingMessageId.put(chatId, messageId);
+        userSessionService.setPendingMessageId(chatId, messageId);
     }
 
     @Override
     public Integer getPendingMessageId(Long chatId) {
-        return pendingMessageId.get(chatId);
+        return userSessionService.getPendingMessageId(chatId);
     }
 
     @Override
     public void clearPendingMessageId(Long chatId) {
-        pendingMessageId.remove(chatId);
+        userSessionService.clearPendingMessageId(chatId);
     }
 
     @Override
     public void setHistoryPage(Long chatId, int page) {
         log.debug("setHistoryPage: chatId={}, page={}", chatId, page);
-        historyPage.put(chatId, page);
-        log.debug("Текущее состояние historyPage: {}", historyPage);
+        userSessionService.setHistoryPage(chatId, page);
+        log.debug("Текущее состояние historyPage: {}", userSessionService.getHistoryPage(chatId));
     }
 
     @Override
     public int getHistoryPage(Long chatId) {
-        int page = historyPage.getOrDefault(chatId, 0);
+        Integer page = userSessionService.getHistoryPage(chatId);
         log.debug("getHistoryPage: chatId={}, page={}", chatId, page);
         return page;
     }
 
     @Override
     public void clearHistoryPage(Long chatId) {
-        historyPage.remove(chatId);
+        userSessionService.clearHistoryPage(chatId);
     }
 }

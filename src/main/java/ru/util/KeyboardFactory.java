@@ -11,6 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 import static ru.util.BotConstants.*;
 
@@ -72,7 +73,7 @@ public class KeyboardFactory {
     public InlineKeyboardMarkup cancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         InlineKeyboardRow row = new InlineKeyboardRow();
-        row.add(createButton("❌ Отменить", "cancel_"));
+        row.add(createButton("❌ Отменить", "cancel_" + appointmentId));
         row.add(createButton("⬅️ Назад", "back_to_menu"));
         rows.add(row);
         return new InlineKeyboardMarkup(rows);
@@ -110,7 +111,7 @@ public class KeyboardFactory {
     // Клавиатура выбора даты
     public InlineKeyboardMarkup dateSelectionKeyboard(List<LocalDate> availableDates) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
-        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)");
+        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru"));
 
         for (LocalDate date : availableDates) {
             rows.add(row(date.format(dateFormat), "date_" + date));
