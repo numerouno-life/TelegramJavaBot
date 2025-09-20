@@ -1,17 +1,17 @@
-package ru.bot.handler;
+package ru.bot.handler.callback;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
-import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import ru.bot.handler.TextMessageHandler;
+import ru.bot.handler.UserCallBackHandler;
 import ru.model.Appointment;
+import ru.model.enums.AdminAppointmentState;
 import ru.model.enums.CallbackType;
 import ru.model.enums.StatusAppointment;
-import ru.service.AppointmentService;
-import ru.service.NotificationService;
+import ru.service.*;
 import ru.util.KeyboardFactory;
 
 import java.time.LocalDate;
@@ -22,26 +22,31 @@ import java.util.List;
 
 import static ru.util.BotConstants.*;
 
-@Slf4j
 @Component
-@AllArgsConstructor
-public class CallbackQueryHandler {
-
-    @Autowired
+@RequiredArgsConstructor
+@Slf4j
+public class UserCallbackHandlerImpl implements UserCallBackHandler {
     private final AppointmentService appointmentService;
     private final NotificationService notificationService;
     private final TextMessageHandler textMessageHandler;
     private final KeyboardFactory keyboardFactory;
+    private final UserService userService;
+    private final AdminService adminService;
+    private final UserSessionService userSessionService;
 
     public static final int PAGE_SIZE_FIVE = 5;
 
-    public void handleCallbackQuery(CallbackQuery callbackQuery) {
+    @Override
+    public void handleUserCallback(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
         Integer messageId = callbackQuery.getMessage().getMessageId();
-        log.debug("Processing callback: data='{}', type={}", data, CallbackType.fromString(data));
+
+        log.debug("Processing user callback: data='{}', type={}", data, CallbackType.fromString(data));
+
         try {
-            switch (CallbackType.fromString(data)) {
+            CallbackType type = CallbackType.fromString(data);
+            switch (type) {
                 case DATE -> handleDateSelection(chatId, messageId, data);
                 case TIME -> handleTimeSelection(chatId, data);
                 case BACK_TO_MENU -> handleBackToMenu(chatId);
@@ -51,9 +56,7 @@ public class CallbackQueryHandler {
                 case CANCEL -> handleCancelAppointment(chatId, messageId, data);
                 case BACK_TO_DATES -> handleBackToDates(chatId, messageId);
 
-                case HISTORY -> {
-                    showPastAppointments(chatId, messageId, 0);
-                }
+                case HISTORY -> showPastAppointments(chatId, messageId, 0);
                 case HISTORY_PAGE -> {
                     try {
                         int page = Integer.parseInt(data.substring("history_page_".length()));
@@ -64,14 +67,17 @@ public class CallbackQueryHandler {
                     }
                 }
 
-                case UNKNOWN -> log.warn("Unknown callback: {}", data);
+                case UNKNOWN -> log.warn("Unknown user callback: {}", data);
+                default -> log.debug("User callback not handled: {}", data);
             }
         } catch (Exception e) {
-            log.error("Error handling callback query: {}", data, e);
+            log.error("Error handling user callback query: {}", data, e);
             notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Произошла ошибка. Попробуйте снова.", null);
         }
     }
+
+    // --- Все методы ниже перенесены из CallbackQueryHandler ---
 
     private void sendTimeSelection(Long chatId, Integer messageId, LocalDate date) {
         List<LocalDateTime> availableSlots = appointmentService.getAvailableTimeSlots(date.atStartOfDay())
@@ -86,7 +92,6 @@ public class CallbackQueryHandler {
                 markup
         );
     }
-
 
     private void showActiveAppointments(Long chatId) {
         List<Appointment> active = appointmentService.getActiveAppointments(chatId);
@@ -142,24 +147,47 @@ public class CallbackQueryHandler {
         notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
     }
 
-
     private void handleDateSelection(Long chatId, Integer messageId, String data) {
         LocalDate selectedDate = LocalDate.parse(data.substring(5));
-        sendTimeSelection(chatId, messageId, selectedDate);
+
+        String role = userSessionService.getRole(chatId);
+        AdminAppointmentState adminState = appointmentService.getAdminState(chatId);
+
+        boolean isAdminFlow = "ADMIN".equals(role) &&
+                (adminState == AdminAppointmentState.AWAITING_DATE);
+
+        if (isAdminFlow) {
+            adminService.sendTimeSelectionForAdmin(chatId, messageId, selectedDate);
+        } else {
+            sendTimeSelection(chatId, messageId, selectedDate);
+        }
     }
 
     private void handleTimeSelection(Long chatId, String data) {
         LocalDateTime selectedTime = LocalDateTime.parse(data.substring(5));
         appointmentService.setPendingDate(chatId, selectedTime);
-        appointmentService.setUserState(chatId, STATE_AWAITING_NAME);
 
-        InlineKeyboardMarkup back = keyboardFactory.backButton("⬅️ Назад", "back_to_dates");
-        Message sentMessage = notificationService.sendMessageAndReturn(chatId,
-                "Вы выбрали: " + selectedTime.format(DATE_FORMAT) + " - "
-                        + selectedTime.format(TIME_FORMAT) + "\n\nВведите ваше имя:", back
-        );
+        String role = userSessionService.getRole(chatId);
+        AdminAppointmentState adminState = appointmentService.getAdminState(chatId);
 
-        appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
+        boolean isAdminFlow = "ADMIN".equals(role) &&
+                adminState == AdminAppointmentState.AWAITING_DATE;
+
+        if (isAdminFlow) {
+            appointmentService.setAdminState(chatId, AdminAppointmentState.AWAITING_PHONE);
+            log.info("✅ Админ-состояние изменено на AWAITING_PHONE для chatId={}", chatId);
+            var sent = notificationService.sendMessageAndReturn(chatId,
+                    "📞 Введите номер телефона клиента:", null);
+            appointmentService.setPendingMessageId(chatId, sent.getMessageId());
+        } else {
+            appointmentService.setUserState(chatId, STATE_AWAITING_NAME);
+            var sentMessage = notificationService.sendMessageAndReturn(chatId,
+                    "Вы выбрали: " + selectedTime.format(DATE_FORMAT) + " - "
+                            + selectedTime.format(TIME_FORMAT) + "\n\nВведите ваше имя:",
+                    keyboardFactory.backButton("⬅️ Назад", "back_to_dates")
+            );
+            appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
+        }
     }
 
     private void handleBackToMenu(Long chatId) {
@@ -192,7 +220,6 @@ public class CallbackQueryHandler {
         if (app.getStatus() != StatusAppointment.CANCELED &&
                 app.getDateTime().isAfter(LocalDateTime.now())) {
 
-            app.setStatus(StatusAppointment.CANCELED);
             appointmentService.cancelAppointment(app.getId());
 
             notificationService.sendOrEditMessage(chatId, messageId,

@@ -50,6 +50,10 @@ public class AppointmentNotificationScheduler {
                 String message = template.formatted(
                         appointment.getDateTime().format(DateTimeFormatter.ofPattern("dd.MM.yyyy 'в' HH:mm"))
                 );
+                if (appointment.getUser().getTelegramId() == null) {
+                    log.warn("Пользователь {} не имеет Telegram ID", appointment.getUser().getUsername());
+                    return; // Пропускаем отправку, если Telegram ID отсутствует
+                }
                 notificationService.sendMessage(
                         appointment.getUser().getTelegramId(),
                         message
