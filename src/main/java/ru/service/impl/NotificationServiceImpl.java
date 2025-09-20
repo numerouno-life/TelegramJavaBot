@@ -12,6 +12,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.service.NotificationService;
+import ru.util.AdminKeyboard;
 import ru.util.KeyboardFactory;
 
 import java.io.Serializable;
@@ -23,6 +24,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final TelegramClient telegramClient;
     private final KeyboardFactory keyboardFactory;
+    private final AdminKeyboard adminKeyboard;
 
     @Override
     public void sendMessage(Long chatId, String text) {
@@ -111,6 +113,16 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public void sendMainMenu(Long chatId, String text) {
         sendMessage(chatId, text, keyboardFactory.mainMenu());
+    }
+
+    @Override
+    public void sendAdminMenu(Long chatId, String text) {
+        sendMessage(chatId, text, adminKeyboard.getMainAdminMenu());
+    }
+
+    @Override
+    public void getUserManagementMenu(Long chatId, String text) {
+        sendMessage(chatId, text, adminKeyboard.getUserManagementMenu());
     }
 
     // Универсальный execute

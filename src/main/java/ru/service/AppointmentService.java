@@ -1,6 +1,7 @@
 package ru.service;
 
 import ru.model.Appointment;
+import ru.model.enums.AdminAppointmentState;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -51,4 +52,15 @@ public interface AppointmentService {
     void clearHistoryPage(Long chatId);
 
     boolean isWorkingDay(LocalDate date);
+
+    String getPendingName(Long chatId);
+
+    void setAdminState(Long chatId, AdminAppointmentState state);
+
+    AdminAppointmentState getAdminState(Long chatId);
+
+    void clearAdminState(Long chatId);
+
+    void clearPendingDate(Long chatId);
+
 }

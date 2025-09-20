@@ -22,11 +22,11 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    @Column(name = "telegram_id", unique = true, nullable = false)
+    @Column(name = "telegram_id")
     Long telegramId;
 
     @Column(name = "username")
-    String username;
+    String username; // telegram @username
 
     @Column(name = "first_name")
     String firstName;
@@ -41,6 +41,10 @@ public class User {
     @Column(name = "role", nullable = false)
     @Builder.Default
     UserRole role = UserRole.USER;
+
+    @Column(name = "is_blocked", nullable = false)
+    @Builder.Default
+    Boolean isBlocked = false;
 
     @Column(name = "created_at", updatable = false, insertable = false)
     LocalDateTime createdAt;

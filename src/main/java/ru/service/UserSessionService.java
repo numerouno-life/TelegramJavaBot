@@ -1,5 +1,7 @@
 package ru.service;
 
+import ru.model.enums.AdminAppointmentState;
+
 import java.time.LocalDateTime;
 
 public interface UserSessionService {
@@ -25,4 +27,24 @@ public interface UserSessionService {
     void clearHistoryPage(Long chatId);
 
     void clearUserState(Long chatId);
+
+    void setRole(Long chatId, String role);
+
+    String getRole(Long chatId);
+
+    void clearRole(Long chatId);
+
+    void setPendingName(Long chatId, String name);
+
+    String getPendingName(Long chatId);
+
+    void clearPendingName(Long chatId);
+
+    void setAdminState(Long chatId, AdminAppointmentState state);
+
+    AdminAppointmentState getAdminState(Long chatId);
+
+    void clearAdminState(Long chatId);
+
+    void clearPendingDate(Long chatId);
 }

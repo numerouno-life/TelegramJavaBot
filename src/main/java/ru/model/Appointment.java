@@ -24,7 +24,7 @@ public class Appointment {
     Long id;
 
     @ManyToOne
-    @JoinColumn(name = "user_id", referencedColumnName = "telegram_id", nullable = false)
+    @JoinColumn(name = "user_id")
     User user;
 
     @Column(name = "date_time", nullable = false)
