@@ -33,8 +33,10 @@ public class AdminServiceImpl implements AdminService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<Appointment> getAllAppointments() {
-        return appointmentRepository.findAllByStatusOrderByDateTimeAsc(StatusAppointment.ACTIVE);
+    public List<Appointment> getAllActiveAppointments() {
+        return appointmentRepository.findAllByStatusOrderByDateTimeAsc(StatusAppointment.ACTIVE).stream()
+                .filter(app -> app.getDateTime().isAfter(LocalDateTime.now()))
+                .toList();
     }
 
     // Записи на конкретный день
@@ -130,10 +132,10 @@ public class AdminServiceImpl implements AdminService {
 
 
 }
-// • ✅ Записать пользователя
+// • ✅ Записать пользователя +
 // • ✅ Отменить запись
-// • ✅ Блокировка/разблокировка пользователей
-//• ✅ Список заблокированных пользователей
+// • ✅ Блокировка/разблокировка пользователей +
+//• ✅ Список заблокированных пользователей +
 // • ✅ Просмотр всех записей +
 // • ✅ Редактирование рабочего времени
 // • ✅ Редактирование рабочих дней

@@ -7,6 +7,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import ru.model.User;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -95,5 +96,20 @@ public class AdminKeyboard {
         )));
 
         return new InlineKeyboardMarkup(rows);
+    }
+
+    // Кнопки отмены записи админом
+    public InlineKeyboardMarkup adminCancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        InlineKeyboardRow row = new InlineKeyboardRow();
+        row.add(keyboardFactory.createButton("❌ Отменить", "admin_cancel_" + appointmentId));
+        row.add(keyboardFactory.createButton("⬅️ Назад", "admin_back"));
+        rows.add(row);
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    // Кнопка назад в админ меню
+    public InlineKeyboardMarkup backToAdminMenu() {
+        return new InlineKeyboardMarkup(List.of(keyboardFactory.row("⬅️ Назад в меню", "admin_back")));
     }
 }

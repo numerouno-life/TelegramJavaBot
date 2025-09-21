@@ -25,6 +25,7 @@ public enum CallbackType {
     ADMIN_SHOW_STATS("admin_stats"),
     ADMIN_SHOW_APPOINTMENTS("admin_appointments"),
     ADMIN_CREATE_APPOINTMENT("admin_create_appointment"),
+    ADMIN_CANCEL_APPOINTMENT("admin_cancel_"),
     ADMIN_BACK("admin_back"),
     ADMIN_DATE("admin_date_"),
     ADMIN_TIME("admin_time_");

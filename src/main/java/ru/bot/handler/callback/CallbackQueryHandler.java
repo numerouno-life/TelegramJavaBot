@@ -52,6 +52,7 @@ public class CallbackQueryHandler {
             case ADMIN_SHOW_USERS,
                  ADMIN_SHOW_APPOINTMENTS,
                  ADMIN_CREATE_APPOINTMENT,
+                 ADMIN_CANCEL_APPOINTMENT,
                  ADMIN_USERS_PAGE,
                  ADMIN_BLOCK_USER,
                  ADMIN_UNBLOCK_USER,

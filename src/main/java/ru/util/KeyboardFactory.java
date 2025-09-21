@@ -77,7 +77,7 @@ public class KeyboardFactory {
     }
 
     // Кнопки отмены записи
-    public InlineKeyboardMarkup cancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
+    public InlineKeyboardMarkup userCancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         InlineKeyboardRow row = new InlineKeyboardRow();
         row.add(createButton("❌ Отменить", "cancel_" + appointmentId));

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 public interface AdminService {
-    List<Appointment> getAllAppointments();
+    List<Appointment> getAllActiveAppointments();
 
     List<Appointment> getAppointmentsToday();
 

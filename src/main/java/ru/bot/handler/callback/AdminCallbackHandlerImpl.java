@@ -10,9 +10,11 @@ import ru.model.Appointment;
 import ru.model.User;
 import ru.model.enums.AdminAppointmentState;
 import ru.model.enums.CallbackType;
+import ru.model.enums.StatusAppointment;
 import ru.service.*;
 import ru.util.AdminKeyboard;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static ru.util.BotConstants.DATE_FORMAT;
@@ -37,6 +39,9 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
         Integer messageId = callbackQuery.getMessage().getMessageId();
         Long adminId = callbackQuery.getFrom().getId();
 
+        log.debug("Processing admin callback: data='{}', type={}", data, CallbackType.fromString(data));
+
+
         if (!userService.isAdmin(adminId)) {
             notificationService.sendOrEditMessage(chatId, messageId, "❌ Доступ запрещён.", null);
         }
@@ -48,6 +53,10 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                 case ADMIN_SHOW_USERS -> showUsers(chatId, messageId, 0);
                 case ADMIN_SHOW_APPOINTMENTS -> showAllActiveAppointments(chatId, messageId, 0);
                 case ADMIN_CREATE_APPOINTMENT -> createAppointmentByAdmin(chatId, messageId);
+                case ADMIN_CANCEL_APPOINTMENT -> {
+                    Long appointmentId = Long.parseLong(data.substring("admin_cancel_".length()));
+                    handleCancelAppointmentByAdmin(chatId, messageId, appointmentId);
+                }
                 case ADMIN_USERS_PAGE -> {
                     int page = Integer.parseInt(data.substring("admin_users_page_".length()));
                     showUsers(chatId, messageId, page);
@@ -71,6 +80,41 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             log.error("Error handling admin callback query: {}", data, e);
             notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Ошибка при обработке запроса. Попробуйте снова.", null);
+        }
+    }
+
+    private void handleCancelAppointmentByAdmin(Long chatId, Integer messageId, Long appointmentId) {
+        try {
+            Appointment app = appointmentService.findById(appointmentId);
+            if (app.getStatus() == StatusAppointment.CANCELED) {
+                notificationService.sendOrEditMessage(chatId, messageId,
+                        "❌ Эта запись уже отменена.", null);
+                return;
+            }
+            if (app.getDateTime().isBefore(LocalDateTime.now())) {
+                notificationService.sendOrEditMessage(chatId, messageId,
+                        "❌ Нельзя отменить прошедшую запись.", null);
+                return;
+            }
+            appointmentService.cancelAppointment(appointmentId);
+
+            String clientName = app.getUser().getFirstName() != null ? app.getUser().getFirstName() : "Клиент";
+            String clientPhone = app.getUser().getClientPhoneNumber() != null ?
+                    app.getUser().getClientPhoneNumber() : "не указан";
+
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "✅ Запись отменена:\n" +
+                            "📅 " + app.getDateTime().format(DATE_FORMAT) + " " + app.getDateTime().format(TIME_FORMAT) + "\n" +
+                            "👤 " + clientName + "\n" +
+                            "📞 " + clientPhone,
+                    adminKeyboard.getMainAdminMenu()
+            );
+
+            log.info("Администратор отменил запись id={} для клиента {}", appointmentId, clientName);
+
+        } catch (Exception e) {
+            log.error("Ошибка при отмене записи админом: id={}", appointmentId, e);
+
         }
     }
 
@@ -131,10 +175,10 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
     }
 
     private void showAllActiveAppointments(Long chatId, Integer messageId, int page) {
-        List<Appointment> appointments = adminService.getAllAppointments();
+        List<Appointment> appointments = adminService.getAllActiveAppointments();
         if (appointments.isEmpty()) {
             notificationService.sendOrEditMessage(chatId, messageId,
-                    "Нет активных записей.", adminKeyboard.getMainAdminMenu());
+                    "Нет активных записей.", adminKeyboard.backToAdminMenu());
             return;
         }
         int totalPages = (int) Math.ceil((double) appointments.size() / PAGE_SIZE_FIVE);
@@ -145,19 +189,24 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
         int end = Math.min(start + PAGE_SIZE_FIVE, appointments.size());
 
         List<Appointment> subList = appointments.subList(start, end);
-        StringBuilder sb = new StringBuilder("📋 Активные записи (")
-                .append(page + 1).append("/").append(totalPages).append("):\n\n");
         for (Appointment a : subList) {
             User client = a.getUser();
             String username = client.getUsername() != null ? client.getUsername() : "нет nickname";
-            sb.append("🔹 ")
-                    .append(username).append(" — ")
-                    .append(a.getDateTime().format(DATE_FORMAT))
-                    .append(" в ").append(a.getDateTime().format(TIME_FORMAT)).append(" ")
-                    .append("т.").append(client.getClientPhoneNumber())
-                    .append("\n");
+            String phone = client.getClientPhoneNumber();
+
+            // Формируем текст для одной записи
+            String text = "🔹 " +
+                    username + " — " +
+                    a.getDateTime().format(DATE_FORMAT) + " в " +
+                    a.getDateTime().format(TIME_FORMAT) + " " +
+                    "т." + phone + "\n";
+
+            // Создаём клавиатуру для этой записи
+            InlineKeyboardMarkup markup = adminKeyboard.adminCancelAppointmentButton(a.getId(), a.getDateTime());
+
+            // Отправляем **отдельное сообщение** для каждой записи
+            notificationService.sendOrEditMessage(chatId, null, text, markup);
         }
-        notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), adminKeyboard.getMainAdminMenu());
     }
 
     private void createAppointmentByAdmin(Long chatId, Integer messageId) {

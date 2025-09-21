@@ -107,8 +107,8 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
                     + "\n💇 Мужская стрижка"
                     + "\n📞 " + app.getUser().getClientPhoneNumber();
 
-            log.debug("Creating cancel button for appointment id={}", app.getId());
-            InlineKeyboardMarkup markup = keyboardFactory.cancelAppointmentButton(
+            log.debug("Отмена записи пользователем: {}", app);
+            InlineKeyboardMarkup markup = keyboardFactory.userCancelAppointmentButton(
                     app.getId(), app.getDateTime()
             );
 
