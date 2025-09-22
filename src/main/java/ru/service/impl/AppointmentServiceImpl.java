@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.error.exception.AppointmentNotFoundException;
 import ru.model.Appointment;
+import ru.model.enums.AdminAppointmentState;
 import ru.model.enums.StatusAppointment;
 import ru.repository.AppointmentRepository;
 import ru.scheduler.AppointmentNotificationScheduler;
@@ -52,11 +53,14 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     // Сохранить запись
-    @Transactional
     @Override
+    @Transactional
     public Appointment createAppointment(Appointment appointment) {
+        if (!isTimeSlotAvailable(appointment.getDateTime())) {
+            throw new IllegalStateException("Слот уже занят");
+        }
+        appointment.setStatus(StatusAppointment.ACTIVE);
         Appointment saved = appointmentRepository.save(appointment);
-        saved.setStatus(StatusAppointment.CONFIRMED);
         notificationScheduler.scheduleNotifications(saved);
         log.info("Запись создана: {}", saved);
         return saved;
@@ -109,7 +113,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     public boolean isTimeSlotAvailable(LocalDateTime dateTime) {
         return appointmentRepository.findByDateTime(dateTime)
                 .stream()
-                .noneMatch(a -> a.getStatus() != StatusAppointment.CANCELED);
+                .noneMatch(a -> a.getStatus() == StatusAppointment.ACTIVE);
     }
 
     // Получить доступные слоты на день (по часам: 10:00, 11:00, ..., 20:00)
@@ -132,7 +136,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalDateTime end = localDate.atTime(endTime);
         List<LocalDateTime> availableSlots = new ArrayList<>();
 
-        while (current.isBefore(end)) {
+        while (!current.isAfter(end)) {
             if (current.isAfter(LocalDateTime.now()) && isTimeSlotAvailable(current)) {
                 availableSlots.add(current);
             }
@@ -149,6 +153,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     // Временное сохранение даты
     @Override
     public void setPendingDate(Long chatId, LocalDateTime dateTime) {
+        log.info("💾 Сохраняем pendingDate: {} → {}", chatId, dateTime);
         userSessionService.setPendingDate(chatId, dateTime);
     }
 
@@ -221,5 +226,35 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     public void clearHistoryPage(Long chatId) {
         userSessionService.clearHistoryPage(chatId);
+    }
+
+    @Override
+    public String getPendingName(Long chatId) {
+        if (chatId == null) {
+            log.warn("Попытка получить имя для chatId = null");
+            return null;
+        } else {
+            return userSessionService.getPendingName(chatId);
+        }
+    }
+
+    @Override
+    public void setAdminState(Long chatId, AdminAppointmentState state) {
+        userSessionService.setAdminState(chatId, state);
+    }
+
+    @Override
+    public AdminAppointmentState getAdminState(Long chatId) {
+        return userSessionService.getAdminState(chatId);
+    }
+
+    @Override
+    public void clearAdminState(Long chatId) {
+        userSessionService.clearAdminState(chatId);
+    }
+
+    @Override
+    public void clearPendingDate(Long chatId) {
+        userSessionService.clearPendingDate(chatId);
     }
 }

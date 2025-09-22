@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.model.WorkDaysOverride;
+import ru.model.WorkSchedule;
 import ru.model.enums.StatusAppointment;
 import ru.repository.AppointmentRepository;
 import ru.repository.WorkDaysOverrideRepository;
@@ -137,5 +138,17 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
             override.setReason(reason);
         }
         workDaysOverrideRepository.save(override);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<WorkSchedule> getAllWorkSchedules() {
+        return workScheduleRepository.findAllByOrderByDayOfWeekAsc();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<WorkSchedule> getAllWorkSchedule() {
+        return workScheduleRepository.findAll();
     }
 }
