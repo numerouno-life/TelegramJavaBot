@@ -136,7 +136,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalDateTime end = localDate.atTime(endTime);
         List<LocalDateTime> availableSlots = new ArrayList<>();
 
-        while (current.isBefore(end)) {
+        while (!current.isAfter(end)) {
             if (current.isAfter(LocalDateTime.now()) && isTimeSlotAvailable(current)) {
                 availableSlots.add(current);
             }

@@ -8,13 +8,16 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import ru.bot.handler.AdminCallbackHandler;
 import ru.model.Appointment;
 import ru.model.User;
+import ru.model.WorkSchedule;
 import ru.model.enums.AdminAppointmentState;
 import ru.model.enums.CallbackType;
 import ru.model.enums.StatusAppointment;
+import ru.repository.WorkScheduleRepository;
 import ru.service.*;
 import ru.util.AdminKeyboard;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 import static ru.util.BotConstants.DATE_FORMAT;
@@ -30,6 +33,8 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
     private final UserService userService;
     private final AppointmentService appointmentService;
     private final UserSessionService userSessionService;
+    private final WorkScheduleService workScheduleService;
+    private final WorkScheduleRepository workScheduleRepository;
 
     public static final int PAGE_SIZE_FIVE = 5;
 
@@ -72,6 +77,25 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                 case ADMIN_SHOW_STATS -> showStats(chatId, messageId);
                 case ADMIN_BACK -> notificationService.sendOrEditMessage(chatId, messageId,
                         "⬅️ Возврат в админ-меню", adminKeyboard.getMainAdminMenu());
+                case ADMIN_EDIT_WORK_SCHEDULE, ADMIN_BACK_TO_SCHEDULE -> showWorkScheduleEditMenu(chatId, messageId);
+                case ADMIN_EDIT_DAY -> {
+                    String dayStr = data.substring("admin:edit:day_".length());
+                    int dayOfWeek = Integer.parseInt(dayStr);
+                    showEditDayForm(chatId, messageId, dayOfWeek);
+                }
+                case ADMIN_SAVE_DAY -> {
+                    String prefix = "admin:save:day_";
+                    String payload = data.substring(prefix.length());
+                    String[] parts = payload.split("_");
+
+                    int dayOfWeek = Integer.parseInt(parts[0]);
+                    LocalTime startTime = parts[1].equals("null") ? null : LocalTime.parse(parts[1]);
+                    LocalTime endTime = parts[2].equals("null") ? null : LocalTime.parse(parts[2]);
+                    boolean isWorking = Boolean.parseBoolean(parts[3]);
+
+                    saveWorkDay(chatId, messageId, dayOfWeek, startTime, endTime, isWorking);
+                }
+                case ADMIN_SCHEDULE_MENU -> showWorkScheduleMenu(chatId, messageId);
                 case UNKNOWN -> log.warn("Unknown admin callback: {}", data);
                 default -> log.debug("Callback not handled by admin: {}", data);
             }
@@ -81,6 +105,76 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Ошибка при обработке запроса. Попробуйте снова.", null);
         }
+    }
+
+    private void saveWorkDay(Long chatId, Integer messageId, int dayOfWeek,
+                             LocalTime startTime, LocalTime endTime, boolean isWorking) {
+        try {
+            workScheduleService.updateWorkDay(dayOfWeek, startTime, endTime, isWorking);
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "✅ Расписание обновлено!", null);
+            showWorkScheduleEditMenu(chatId, messageId);
+        } catch (Exception e) {
+            log.error("Ошибка при сохранении расписания: {}", e.getMessage(), e);
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "❌ Ошибка при сохранении", null);
+        }
+    }
+
+    private void showEditDayForm(Long chatId, Integer messageId, int dayOfWeek) {
+        WorkSchedule schedule = workScheduleRepository.findByDayOfWeek(dayOfWeek);
+        if (schedule == null) {
+            notificationService.sendOrEditMessage(chatId, messageId, "День не найден.", null);
+            return;
+        }
+        String dayName = getDayName(dayOfWeek);
+        InlineKeyboardMarkup markup = adminKeyboard.getEditDayKeyboard(dayOfWeek, schedule);
+
+        String text = "✏️ Редактирование дня: " + dayName + "\n" +
+                "Текущее время: " + (schedule.getIsWorkingDay()
+                ? schedule.getStartTime() + " - " + schedule.getEndTime()
+                : "выходной") + "\n\n" +
+                "Выберите новое время или статус:";
+
+        notificationService.sendOrEditMessage(chatId, messageId, text, markup);
+    }
+
+    private void showWorkScheduleEditMenu(Long chatId, Integer messageId) {
+        List<WorkSchedule> schedules = workScheduleService.getAllWorkSchedules();
+        InlineKeyboardMarkup markup = adminKeyboard.getWorkScheduleMenu(schedules);
+        StringBuilder sb = new StringBuilder("📅 *Базовое расписание работы*\n\n");
+        for (WorkSchedule s : schedules) {
+            String dayName = getDayName(s.getDayOfWeek());
+            if (s.getIsWorkingDay()) {
+                sb.append("✅ ").append(dayName)
+                        .append(": ").append(s.getStartTime()).append(" - ").append(s.getEndTime())
+                        .append("\n");
+            } else {
+                sb.append("❌ ").append(dayName).append(" — выходной\n");
+            }
+        }
+        notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
+    }
+
+    private void showWorkScheduleMenu(Long chatId, Integer messageId) {
+        List<WorkSchedule> schedules = workScheduleService.getAllWorkSchedules();
+        StringBuilder sb = new StringBuilder("📅 *Расписание работы*\n\n");
+
+        for (WorkSchedule s : schedules) {
+            String dayName = getDayName(s.getDayOfWeek());
+            if (s.getIsWorkingDay()) {
+                sb.append("✅ ").append(dayName)
+                        .append(": ").append(s.getStartTime()).append(" - ").append(s.getEndTime())
+                        .append("\n");
+            } else {
+                sb.append("❌ ").append(dayName).append(" — выходной\n");
+            }
+        }
+
+        // только кнопка "Назад"
+        InlineKeyboardMarkup markup = adminKeyboard.backToAdminMenu();
+
+        notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
     }
 
     private void handleCancelAppointmentByAdmin(Long chatId, Integer messageId, Long appointmentId) {
@@ -217,5 +311,17 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
         notificationService.sendOrEditMessage(chatId, messageId, "👤 Введите имя клиента:", null);
     }
 
+    private String getDayName(int dayOfWeek) {
+        return switch (dayOfWeek) {
+            case 1 -> "Понедельник";
+            case 2 -> "Вторник";
+            case 3 -> "Среда";
+            case 4 -> "Четверг";
+            case 5 -> "Пятница";
+            case 6 -> "Суббота";
+            case 7 -> "Воскресенье";
+            default -> "Неизвестный день";
+        };
 
+    }
 }

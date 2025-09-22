@@ -6,6 +6,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import ru.model.User;
+import ru.model.WorkSchedule;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -24,8 +25,10 @@ public class AdminKeyboard {
                 keyboardFactory.row(CMD_ALL_APPOINTMENTS, "admin_appointments"),
                 keyboardFactory.row(CMD_CREATE_APPOINTMENT_ADMIN, "admin_create_appointment"),
                 keyboardFactory.row(CMD_ALL_USERS, "admin_show_users"),
-                keyboardFactory.row(CMD_WORKING_HOURS, "admin:schedule:menu"),
-                keyboardFactory.row(CMD_SHOW_STATS, "admin_stats")
+                keyboardFactory.row(CMD_ADMIN_SCHEDULE_MENU, "admin:schedule:menu"),
+                keyboardFactory.row(CMD_SHOW_STATS, "admin_stats"),
+                keyboardFactory.row(CMD_ADMIN_EDIT_WORK_SCHEDULE, "admin:edit:schedule")
+
         ));
     }
 
@@ -111,5 +114,64 @@ public class AdminKeyboard {
     // Кнопка назад в админ меню
     public InlineKeyboardMarkup backToAdminMenu() {
         return new InlineKeyboardMarkup(List.of(keyboardFactory.row("⬅️ Назад в меню", "admin_back")));
+    }
+
+    public InlineKeyboardMarkup getWorkScheduleMenu(List<WorkSchedule> schedules) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+
+        for (WorkSchedule s : schedules) {
+            String dayName = getShortDayName(s.getDayOfWeek());
+            String text = (s.getIsWorkingDay() ? "✅ " : "❌ ") + dayName;
+            InlineKeyboardButton button = keyboardFactory.createButton(
+                    text,
+                    "admin:edit:day_" + s.getDayOfWeek()
+            );
+            rows.add(new InlineKeyboardRow(List.of(button)));
+        }
+
+        rows.add(new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton("⬅️ Назад", "admin_back")
+        )));
+
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public InlineKeyboardMarkup getEditDayKeyboard(int dayOfWeek, WorkSchedule schedule) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        // Варианты времени
+        String[][] timeOptions = {
+                {"10:00", "18:00"},
+                {"09:00", "17:00"},
+                {"11:00", "20:00"},
+                {"10:00", "22:00"},
+                {"10:00", "20:00"}
+        };
+        for (String[] option : timeOptions) {
+            String text = option[0] + " - " + option[1];
+            String callback = "admin:save:day_" + dayOfWeek + "_" + option[0] + "_" + option[1] + "_true";
+            rows.add(new InlineKeyboardRow(List.of(keyboardFactory.createButton(text, callback))));
+        }
+        // Кнопка "Выходной"
+        String callback = "admin:save:day_" + dayOfWeek + "_null_null_false";
+        rows.add(new InlineKeyboardRow(List.of(keyboardFactory.createButton("❌ Сделать выходным", callback))));
+
+// Назад
+        rows.add(new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton("⬅️ Назад", "admin:back:schedule")
+        )));
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    private String getShortDayName(int dayOfWeek) {
+        return switch (dayOfWeek) {
+            case 1 -> "Пн";
+            case 2 -> "Вт";
+            case 3 -> "Ср";
+            case 4 -> "Чт";
+            case 5 -> "Пт";
+            case 6 -> "Сб";
+            case 7 -> "Вс";
+            default -> "?";
+        };
     }
 }

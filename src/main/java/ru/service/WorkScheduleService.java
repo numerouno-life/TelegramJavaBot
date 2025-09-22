@@ -1,5 +1,7 @@
 package ru.service;
 
+import ru.model.WorkSchedule;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -16,4 +18,8 @@ public interface WorkScheduleService {
     void updateWorkDay(Integer dayOfWeek, LocalTime startTime, LocalTime endTime, boolean isWorking);
 
     void setWorkDayOverride(LocalDate date, LocalTime start, LocalTime end, boolean isWorking, String reason);
+
+    List<WorkSchedule> getAllWorkSchedules();
+
+    List<WorkSchedule> getAllWorkSchedule();
 }

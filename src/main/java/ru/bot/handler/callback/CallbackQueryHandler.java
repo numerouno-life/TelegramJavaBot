@@ -57,6 +57,11 @@ public class CallbackQueryHandler {
                  ADMIN_BLOCK_USER,
                  ADMIN_UNBLOCK_USER,
                  ADMIN_SHOW_STATS,
+                 ADMIN_EDIT_WORK_SCHEDULE,
+                 ADMIN_EDIT_DAY,
+                 ADMIN_SAVE_DAY,
+                 ADMIN_BACK_TO_SCHEDULE,
+                 ADMIN_SCHEDULE_MENU,
                  ADMIN_BACK -> true;
             default -> false;
         };

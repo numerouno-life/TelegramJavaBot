@@ -14,8 +14,6 @@ public enum CallbackType {
     HISTORY("history"),
     BACK_TO_DATES("back_to_dates"),
     UNKNOWN("unknown"),
-    HISTORY_NEXT("history_next"),
-    HISTORY_PREV("history_prev"),
 
     ADMIN_SHOW_USERS("admin_show_users"),
     ADMIN_USERS_PAGE("admin_users_page_"),
@@ -27,8 +25,12 @@ public enum CallbackType {
     ADMIN_CREATE_APPOINTMENT("admin_create_appointment"),
     ADMIN_CANCEL_APPOINTMENT("admin_cancel_"),
     ADMIN_BACK("admin_back"),
-    ADMIN_DATE("admin_date_"),
-    ADMIN_TIME("admin_time_");
+    ADMIN_EDIT_WORK_SCHEDULE("admin:edit:schedule"),
+    ADMIN_EDIT_DAY("admin:edit:day_"),
+    ADMIN_SAVE_DAY("admin:save:day_"),
+    ADMIN_BACK_TO_SCHEDULE("admin:back:schedule"),
+    ADMIN_SCHEDULE_MENU("admin:schedule:menu");
+
 
     private final String prefix;
 
