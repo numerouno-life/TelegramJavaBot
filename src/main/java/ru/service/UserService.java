@@ -9,7 +9,7 @@ public interface UserService {
 
     User getOrCreateUser(Long telegramId, String username, String firstName, String lastName);
 
-    User updateUserPhone(Long telegramId, String phone);
+    User updateUserDetails(Long telegramId,String name, String phone);
 
     Optional<User> findByTelegramId(Long telegramId);
 

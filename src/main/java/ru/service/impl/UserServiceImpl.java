@@ -23,25 +23,32 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public User getOrCreateUser(Long telegramId, String username, String firstName, String lastName) {
-        return userRepository.findByTelegramId(telegramId)
+        User user = userRepository.findByTelegramId(telegramId)
                 .orElseGet(() -> {
                     User newUser = User.builder()
                             .telegramId(telegramId)
-                            .username(username)
-                            .firstName(firstName)
-                            .lastName(lastName)
                             .role(UserRole.USER)
                             .build();
                     log.info("Создан новый пользователь: {}", newUser);
-                    return userRepository.save(newUser);
+                    return newUser;
                 });
+
+        user.setUsername(username);
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        log.info("Обновление пользователя: id={}, username={}, firstName={}", telegramId, username, firstName);
+
+        return userRepository.save(user);
     }
 
     @Override
     @Transactional
-    public User updateUserPhone(Long telegramId, String phone) {
+    public User updateUserDetails(Long telegramId, String name, String phone) {
+        log.info("Обновление пользователя: chatId={}, name={}, phone={}",
+                telegramId, name, phone);
         User user = findUserById(telegramId);
         user.setClientPhoneNumber(phone);
+        user.setFirstName(name);
         return userRepository.save(user);
     }
 
@@ -51,9 +58,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public Boolean isAdmin(Long telegramId) {
-        User user = findUserById(telegramId);
-        return user.getRole() == UserRole.ADMIN;
+    public Boolean isAdmin(Long chatId) {
+        return findByTelegramId(chatId)
+                .map(user -> UserRole.ADMIN.equals(user.getRole()))
+                .orElse(false);
     }
 
     @Override

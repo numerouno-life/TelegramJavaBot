@@ -11,7 +11,7 @@ public class BotConstants {
     public static final String ICON_USERS = "👥";
     public static final String ICON_BLOCK = "🚫";
     public static final String ICON_UNBLOCK = "✅";
-    public static final String ICON_BACK = "🔙";
+    public static final String ICON_BACK = "⬅️";
     public static final String ICON_STATS = "📊";
     public static final String ICON_SETTINGS = "⚙️";
     public static final String ICON_CALENDAR = "🗓";
@@ -26,22 +26,23 @@ public class BotConstants {
 
     // Команды админа
     public static final String CMD_ADMIN = "/admin";
-    public static final String CMD_ALL_APPOINTMENTS = ICON_LIST + " Все активные записи";
+    public static final String CMD_ALL_APPOINTMENTS = ICON_LIST + " Все активные записи/отмена записи";
+    public static final String CMD_ADMIN_APPOINTMENTS_TODAY = ICON_LIST + " Записи на сегодня";
+    public static final String CMD_ADMIN_APPOINTMENTS_TOMORROW = ICON_LIST + " Записи на завтра";
     public static final String CMD_CREATE_APPOINTMENT_ADMIN = ICON_BOOK + " Создать запись";
     public static final String CMD_ALL_USERS = ICON_USERS + " Пользователи";
     public static final String CMD_WORKING_HOURS = ICON_CALENDAR + " График работы";
     public static final String CMD_BLOCKED_USER = ICON_BLOCK + " Заблокировать";
     public static final String CMD_UNBLOCKED_USER = ICON_UNBLOCK + " Разблокировать";
-    public static final String CMD_ADMIN_BACK = ICON_BACK + " Назад";
+    public static final String CMD_ADMIN_BACK = ICON_BACK + " Назад в Админку";
     public static final String CMD_SHOW_STATS = ICON_STATS + " Статистика";
     public static final String CMD_ADMIN_EDIT_WORK_SCHEDULE = ICON_SETTINGS + " Редактировать расписание";
-    public static final String CMD_ADMIN_SCHEDULE_MENU = ICON_CALENDAR + " Расписание";
-
-    // Состояния
-    public static final String STATE_AWAITING_NAME = "AWAITING_NAME";
-    public static final String STATE_AWAITING_PHONE = "AWAITING_PHONE";
-    public static final String STATE_AWAITING_DATE = "AWAITING_DATE";
-
+    public static final String CMD_ADMIN_SCHEDULE_MENU = ICON_CALENDAR + " Расписание работы";
+    public static final String CMD_ADMIN_MANAGE_OVERRIDES = ICON_SETTINGS + " Меню исключений";
+    public static final String CMD_ADMIN_ALL_OVERRIDES = ICON_LIST + " Исключения";
+    public static final String CMD_ADMIN_ADD_OVERRIDE = ICON_BOOK + " Добавить исключение";
+    public static final String CMD_ADMIN_DELETE_OVERRIDE = ICON_HISTORY + " Удалить исключение";
+    public static final String CMD_ADMIN_BACK_TO_OVERRIDES = ICON_BACK + " Назад к списку исключений";
 
     // Форматы
     public static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");

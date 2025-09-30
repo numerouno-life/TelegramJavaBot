@@ -10,14 +10,15 @@ import ru.model.Appointment;
 import ru.model.User;
 import ru.model.enums.AdminAppointmentState;
 import ru.model.enums.StatusAppointment;
-import ru.service.AppointmentService;
-import ru.service.NotificationService;
-import ru.service.UserService;
-import ru.service.UserSessionService;
+import ru.model.enums.UserAppointmentState;
+import ru.model.enums.UserRole;
+import ru.service.*;
+import ru.util.AdminKeyboard;
 import ru.util.KeyboardFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,15 +35,25 @@ public class TextMessageHandler {
     private final KeyboardFactory keyboardFactory;
     private final UserService userService;
     private final UserSessionService userSessionService;
+    private final WorkScheduleService workScheduleService;
+    private final AdminKeyboard adminKeyboard;
+    private final AdminCallbackHandler adminCallbackHandler;
 
     public void handleTextMessage(Update update) {
         Message message = update.getMessage();
         Long chatId = message.getChatId();
         String text = message.getText();
         String role = userSessionService.getRole(chatId);
+        User from = userService.getOrCreateUser(
+                chatId,
+                message.getFrom().getUserName(),
+                message.getFrom().getFirstName(),
+                message.getFrom().getLastName()
+        );
 
         if (CMD_ADMIN.equalsIgnoreCase(text)) {
             if (userService.isAdmin(chatId)) {
+                userSessionService.setRole(chatId, "ADMIN");
                 notificationService.sendAdminMenu(chatId, "🔐 *Админ-панель*");
             } else {
                 notificationService.sendMessage(chatId, "❌ У вас нет доступа к админ-панели.");
@@ -50,8 +61,10 @@ public class TextMessageHandler {
             return;
         }
 
-        String userState = appointmentService.getUserState(chatId);
+        UserAppointmentState userState = appointmentService.getUserState(chatId);
         AdminAppointmentState adminState = appointmentService.getAdminState(chatId);
+        log.debug("👑 Admin mode: chatId={}, adminState={}", chatId, adminState);
+        log.debug("👤 User state: {}", userState);
 
         if (CMD_START.equalsIgnoreCase(text) || CMD_BEGIN.equalsIgnoreCase(text)) {
             sendWelcome(chatId);
@@ -59,20 +72,25 @@ public class TextMessageHandler {
         }
 
         // Обработка обычного пользователя
-        if (STATE_AWAITING_NAME.equals(userState)) {
+        if (UserAppointmentState.STATE_AWAITING_NAME.equals(userState)) {
             handleUserName(chatId, text, message.getMessageId());
             return;
         }
-        if (STATE_AWAITING_PHONE.equals(userState)) {
-            handleUserPhone(chatId, text, message.getMessageId(), false);
+        if (UserAppointmentState.STATE_AWAITING_PHONE.equals(userState)) {
+            handleUserPhone(chatId, text, message.getMessageId(), false, message.getFrom().getUserName());
             return;
         }
 
         // Обработка админа
         if ("ADMIN".equals(role)) {
+            log.debug("👑 Admin mode: chatId={}, adminState={}", chatId, adminState);
             switch (adminState) {
-                case AWAITING_NAME -> handleUserName(chatId, text, message.getMessageId());
-                case AWAITING_PHONE -> handleUserPhone(chatId, text, message.getMessageId(), true);
+                case ADM_AWAITING_NAME -> handleUserName(chatId, text, message.getMessageId());
+                case ADM_AWAITING_PHONE -> handleUserPhone(chatId, text, message.getMessageId(),
+                        true, message.getFrom().getUserName());
+                case AWAITING_OVERRIDE_DATE -> handleAdminOverrideDate(chatId, text);
+                case AWAITING_OVERRIDE_TIME -> handleAdminOverrideTime(chatId, text);
+                case AWAITING_OVERRIDE_REASON -> handleAdminOverrideReason(chatId, text);
                 default -> notificationService.sendAdminMenu(chatId, "🔐 *Админ-панель*");
             }
             return;
@@ -82,6 +100,57 @@ public class TextMessageHandler {
         notificationService.sendMainMenu(chatId, "Выберите действие:");
     }
 
+    private void handleAdminOverrideReason(Long chatId, String text) {
+        LocalDate date = userSessionService.getPendingDate(chatId).toLocalDate();
+        String reason = "-".equals(text.trim()) ? "" : text.trim();
+
+        if ("false".equals(userSessionService.getPendingName(chatId))) {
+            // выходной
+            workScheduleService.setWorkDayOverride(date, null, null, false, reason);
+        } else {
+            // рабочий день
+            LocalTime start = userSessionService.getPendingStartTime(chatId);
+            LocalTime end = userSessionService.getPendingEndTime(chatId);
+            workScheduleService.setWorkDayOverride(date, start, end, true, reason);
+        }
+        notificationService.sendMessage(chatId, "✅ Исключение добавлено!");
+        userSessionService.clearAdminState(chatId);
+        notificationService.sendOrEditMessage(chatId, null,
+                "🔐 *Админ-панель*", adminKeyboard.getMainAdminMenu());
+    }
+
+    private void handleAdminOverrideTime(Long chatId, String text) {
+        if ("выходной".equalsIgnoreCase(text.trim())) {
+            userSessionService.setAdminState(chatId, AdminAppointmentState.AWAITING_OVERRIDE_REASON);
+            userSessionService.setPendingName(chatId, "false");
+            notificationService.sendMessage(chatId, "📝 Введите причину (или '-'):");
+        } else {
+            try {
+                String[] parts = text.split("-");
+                LocalTime start = LocalTime.parse(parts[0].trim());
+                LocalTime end = LocalTime.parse(parts[1].trim());
+                userSessionService.setPendingStartTime(chatId, start);
+                userSessionService.setPendingEndTime(chatId, end);
+                userSessionService.setAdminState(chatId, AdminAppointmentState.AWAITING_OVERRIDE_REASON);
+                notificationService.sendMessage(chatId, "📝 Введите причину (или '-'):");
+            } catch (Exception e) {
+                notificationService.sendMessage(chatId, "❌ Неверный формат времени. Попробуйте: 10:00-18:00");
+            }
+        }
+    }
+
+    private void handleAdminOverrideDate(Long chatId, String dateString) {
+        try {
+            LocalDate date = LocalDate.parse(dateString);
+            userSessionService.setPendingDate(chatId, date.atStartOfDay());
+            userSessionService.setAdminState(chatId, AdminAppointmentState.AWAITING_OVERRIDE_TIME);
+            notificationService.sendMessage(chatId, "⏰ Введите время в формате ЧЧ:ММ-ЧЧ:ММ (например, 10:00-18:00)\n" +
+                    "Или отправьте 'выходной'.");
+        } catch (Exception e) {
+            notificationService.sendMessage(chatId, "❌ Неверный формат даты. Попробуйте снова: ГГГГ-ММ-ДД");
+        }
+
+    }
 
     private void sendWelcome(Long chatId) {
         String welcome = """
@@ -102,10 +171,13 @@ public class TextMessageHandler {
 
         String role = userSessionService.getRole(chatId);
         if ("ADMIN".equals(role)) {
-            appointmentService.setAdminState(chatId, AdminAppointmentState.AWAITING_DATE);
-            sendDateSelectionForAdmin(chatId); // ← новый метод
+            deletePendingMessage(chatId, messageId);
+            appointmentService.setAdminState(chatId, AdminAppointmentState.ADM_AWAITING_PHONE);
+            Message sent = notificationService.sendMessageAndReturn(chatId,
+                    "📞 Введите номер телефона клиента:", null);
+            appointmentService.setPendingMessageId(chatId, sent.getMessageId());
         } else {
-            appointmentService.setUserState(chatId, STATE_AWAITING_PHONE);
+            appointmentService.setUserState(chatId, UserAppointmentState.STATE_AWAITING_PHONE);
             Message sentMessage = notificationService.sendMessageAndReturn(chatId,
                     "Спасибо, *%s*! Теперь введите номер телефона 📱".formatted(name),
                     keyboardFactory.backButton("⬅️ Назад", "back_to_dates")
@@ -114,7 +186,8 @@ public class TextMessageHandler {
         }
     }
 
-    private void handleUserPhone(Long chatId, String phone, Integer messageId, boolean isAdminFlow) {
+    private void handleUserPhone(Long chatId, String phone, Integer messageId,
+                                 boolean isAdminFlow, String telegramUsername) {
         log.info("📞 handleUserPhone вызван: chatId={}, isAdminFlow={}, adminState={}",
                 chatId, isAdminFlow, appointmentService.getAdminState(chatId));
         deletePendingMessage(chatId, messageId);
@@ -133,7 +206,7 @@ public class TextMessageHandler {
             if (isAdminFlow) {
                 user = userService.findOrCreateByPhone(phone, name);
             } else {
-                user = userService.updateUserPhone(chatId, phone); // привязывает к текущему chatId
+                user = userService.updateUserDetails(chatId, name, phone); // привязывает к текущему chatId
             }
 
             Appointment appointment = Appointment.builder()
@@ -142,11 +215,17 @@ public class TextMessageHandler {
                     .status(StatusAppointment.ACTIVE)
                     .createdAt(LocalDateTime.now())
                     .build();
+            log.info("Сохранённая запись: ID={}, Клиент={}, Дата={}, Статус={}",
+                    appointment.getId(),
+                    appointment.getUser().getFirstName(),
+                    appointment.getDateTime(),
+                    appointment.getStatus());
 
             appointmentService.createAppointment(appointment);
 
             // ✅ Отправляем уведомление клиенту (если известен его chatId)
             notifyClientIfPossible(user, appointment, chatId);
+
 
             // Завершаем сессию
             appointmentService.clearUserState(chatId);
@@ -172,10 +251,10 @@ public class TextMessageHandler {
             notificationService.sendMessage(chatId, "❌ Время уже занято. Выберите новое.");
 
             if (isAdminFlow) {
-                appointmentService.setAdminState(chatId, AdminAppointmentState.AWAITING_DATE);
+                appointmentService.setAdminState(chatId, AdminAppointmentState.ADM_AWAITING_DATE);
                 sendDateSelection(chatId, null);
             } else {
-                appointmentService.setUserState(chatId, STATE_AWAITING_DATE);
+                appointmentService.setUserState(chatId, UserAppointmentState.STATE_AWAITING_PHONE);
                 sendDateSelection(chatId, null);
             }
         }
@@ -186,14 +265,14 @@ public class TextMessageHandler {
         if (user.getTelegramId() != null) {
             try {
                 notificationService.sendMessage(user.getTelegramId(), """
-                    📢 Администратор записал вас на %s.
-                    
-                    Стрижка состоится:
-                    📅 %s
-                    ⏰ %s
-                    
-                    Если не сможете прийти — отмените запись в меню.
-                    """.formatted(
+                        📢 Администратор записал вас на %s.
+                        
+                        Стрижка состоится:
+                        📅 %s
+                        ⏰ %s
+                        
+                        Если не сможете прийти — отмените запись в меню.
+                        """.formatted(
                         appointment.getDateTime().format(DATE_FORMAT),
                         appointment.getDateTime().format(DATE_FORMAT),
                         appointment.getDateTime().format(TIME_FORMAT)
@@ -219,7 +298,7 @@ public class TextMessageHandler {
         if (messageId != null) {
             notificationService.deleteMessage(chatId, messageId);
         }
-        appointmentService.setUserState(chatId, STATE_AWAITING_DATE);
+        appointmentService.setUserState(chatId, UserAppointmentState.STATE_AWAITING_DATE);
         sendDateSelection(chatId, null);
     }
 
@@ -238,7 +317,7 @@ public class TextMessageHandler {
             }
         }
 
-        InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates);
+        InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates, UserRole.USER);
         notificationService.sendOrEditMessage(chatId, messageId, "Выберите дату записи:", markup);
     }
 
@@ -249,22 +328,5 @@ public class TextMessageHandler {
         userSessionService.clearRole(chatId);
         userSessionService.clearPendingName(chatId);
         appointmentService.clearPendingDate(chatId);
-    }
-
-    public void sendDateSelectionForAdmin(Long chatId) {
-        LocalDate today = LocalDate.now();
-        List<LocalDate> availableDates = new ArrayList<>();
-        for (int i = 0; i < 14; i++) { // даём больше дней админу
-            LocalDate date = today.plusDays(i);
-            if (appointmentService.isWorkingDay(date)) {
-                List<LocalDateTime> slots = appointmentService.getAvailableTimeSlots(date.atStartOfDay());
-                if (!slots.isEmpty()) {
-                    availableDates.add(date);
-                }
-            }
-        }
-
-        InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates);
-        notificationService.sendOrEditMessage(chatId, null, "📅 Выберите дату для клиента:", markup);
     }
 }

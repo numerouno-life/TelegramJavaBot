@@ -5,20 +5,27 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import ru.bot.handler.AdminCallbackHandler;
 import ru.model.Appointment;
 import ru.model.User;
+import ru.model.WorkDaysOverride;
 import ru.model.WorkSchedule;
-import ru.model.enums.AdminAppointmentState;
-import ru.model.enums.CallbackType;
-import ru.model.enums.StatusAppointment;
+import ru.model.enums.*;
+import ru.repository.WorkDaysOverrideRepository;
 import ru.repository.WorkScheduleRepository;
 import ru.service.*;
 import ru.util.AdminKeyboard;
+import ru.util.KeyboardFactory;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static ru.util.BotConstants.DATE_FORMAT;
 import static ru.util.BotConstants.TIME_FORMAT;
@@ -35,6 +42,8 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
     private final UserSessionService userSessionService;
     private final WorkScheduleService workScheduleService;
     private final WorkScheduleRepository workScheduleRepository;
+    private final WorkDaysOverrideRepository workDaysOverrideRepository;
+    private final KeyboardFactory keyboardFactory;
 
     public static final int PAGE_SIZE_FIVE = 5;
 
@@ -57,6 +66,8 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             switch (type) {
                 case ADMIN_SHOW_USERS -> showUsers(chatId, messageId, 0);
                 case ADMIN_SHOW_APPOINTMENTS -> showAllActiveAppointments(chatId, messageId, 0);
+                case ADMIN_ALL_TODAY_APP -> showAllAppointmentsToday(chatId, messageId);
+                case ADMIN_ALL_TOMORROW_APP -> showAllAppointmentsTomorrow(chatId, messageId);
                 case ADMIN_CREATE_APPOINTMENT -> createAppointmentByAdmin(chatId, messageId);
                 case ADMIN_CANCEL_APPOINTMENT -> {
                     Long appointmentId = Long.parseLong(data.substring("admin_cancel_".length()));
@@ -96,6 +107,21 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                     saveWorkDay(chatId, messageId, dayOfWeek, startTime, endTime, isWorking);
                 }
                 case ADMIN_SCHEDULE_MENU -> showWorkScheduleMenu(chatId, messageId);
+                case ADMIN_MANAGE_OVERRIDES -> showOverridesMenu(chatId, messageId);
+                case ADMIN_ADD_OVERRIDE -> showAddOverrideForm(chatId, messageId);
+                case ADMIN_DELETE_OVERRIDE -> {
+                    LocalDate date = LocalDate.parse(data.substring("admin:override:delete_".length()));
+                    deleteOverride(chatId, messageId, date);
+                }
+                case ADMIN_MENU_APPOINTMENTS -> notificationService.sendOrEditMessage(chatId, messageId,
+                        "📋 *Управление записями*", adminKeyboard.getAppointmentsSubMenu());
+
+                case ADMIN_MENU_SCHEDULE -> notificationService.sendOrEditMessage(chatId, messageId,
+                        "🗓 *Управление расписанием*", adminKeyboard.getScheduleSubMenu());
+                case ADMIN_APPOINTMENTS_PAGE -> {
+                    int page = Integer.parseInt(data.substring("admin:appointments:page_".length()));
+                    showAllActiveAppointments(chatId, messageId, page);
+                }
                 case UNKNOWN -> log.warn("Unknown admin callback: {}", data);
                 default -> log.debug("Callback not handled by admin: {}", data);
             }
@@ -105,6 +131,54 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Ошибка при обработке запроса. Попробуйте снова.", null);
         }
+    }
+
+    private void deleteOverride(Long chatId, Integer messageId, LocalDate date) {
+        workScheduleService.deleteOverrideByDate(date);
+        notificationService.sendOrEditMessage(chatId, messageId,
+                "✅ Исключение удалено: " + date.format(DATE_FORMAT),
+                null);
+        showOverridesMenu(chatId, messageId);
+    }
+
+    private void showAddOverrideForm(Long chatId, Integer messageId) {
+        String text = """
+                📝 *Добавить исключение*
+                
+                Отправьте дату в формате: `ГГГГ-ММ-ДД`
+                Например: `2025-12-31`
+                
+                Или нажмите "Отмена".
+                """;
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(
+                adminKeyboard.backToAdminMenu()
+        ));
+        notificationService.sendOrEditMessage(chatId, messageId, text, markup);
+        userSessionService.setRole(chatId, "ADMIN");
+        userSessionService.setAdminState(chatId, AdminAppointmentState.AWAITING_OVERRIDE_DATE);
+    }
+
+    private void showOverridesMenu(Long chatId, Integer messageId) {
+        List<WorkDaysOverride> workDaysOverrides = workDaysOverrideRepository.findAllByOrderByDateDesc();
+        InlineKeyboardMarkup markup = adminKeyboard.getOverridesMenu(workDaysOverrides);
+        StringBuilder sb = new StringBuilder("📆 *Исключения в расписании*\n\n");
+        if (workDaysOverrides.isEmpty()) {
+            sb.append("❌ Нет исключений.\n\n");
+        } else {
+            for (WorkDaysOverride o : workDaysOverrides) {
+                sb.append("📅 ").append(o.getDate().format(DATE_FORMAT))
+                        .append(" — ").append(o.getIsWorkingDay() ? "✅ рабочий" : "❌ выходной");
+                if (o.getReason() != null) {
+                    sb.append(" (").append(o.getReason()).append(")");
+                }
+                if (o.getIsWorkingDay() && o.getStartTime() != null) {
+                    sb.append(" ").append(o.getStartTime()).append("-").append(o.getEndTime());
+                }
+                sb.append("\n");
+            }
+        }
+        notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
+
     }
 
     private void saveWorkDay(Long chatId, Integer messageId, int dayOfWeek,
@@ -172,7 +246,7 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
         }
 
         // только кнопка "Назад"
-        InlineKeyboardMarkup markup = adminKeyboard.backToAdminMenu();
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(adminKeyboard.backToScheduleMenu()));
 
         notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
     }
@@ -205,6 +279,12 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             );
 
             log.info("Администратор отменил запись id={} для клиента {}", appointmentId, clientName);
+            notificationService.sendMessage(app.getUser().getTelegramId(),
+                    "❌ Ваша запись отменена.\n" +
+                            "Администратор отменил запись на " + app.getDateTime().format(DATE_FORMAT) +
+                            " " + app.getDateTime().format(TIME_FORMAT) + "\n" +
+                            "Если вы не согласны с этим, свяжитесь с администратором.");
+            log.info("Пользователь {} получил уведомление о отмене записи", app.getUser().getTelegramId());
 
         } catch (Exception e) {
             log.error("Ошибка при отмене записи админом: id={}", appointmentId, e);
@@ -228,11 +308,18 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
     private void showStats(Long chatId, Integer messageId) {
         int totalUsers = adminService.getAllUsers().size();
         int blockedUsers = adminService.getBlockedUsers().size();
+        int totalUsersUnique = adminService.getAllUsers().stream()
+                .filter(user -> user.getTelegramId() != null)
+                .toList().size();
+        int totalAppointments = adminService.getAllAppointments().size();
+        int totalActiveAppointments = adminService.getAllActiveAppointments().size();
 
         String stats = "📊 Статистика:\n" +
                 "• 👥 Всего пользователей: " + totalUsers + "\n" +
+                "• 👥 Уникальных пользователей: " + totalUsersUnique + "\n" +
                 "• 🚫 Заблокированных: " + blockedUsers + "\n" +
-                "• ✅ Активных: " + (totalUsers - blockedUsers) + "\n";
+                "• ✅ Активных записей: " + totalActiveAppointments + "\n" +
+                "• 📆 Записей за всё время: " + totalAppointments;
         notificationService.sendOrEditMessage(chatId, messageId, stats, adminKeyboard.getMainAdminMenu());
     }
 
@@ -244,6 +331,18 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                     adminKeyboard.getMainAdminMenu());
             return;
         }
+        List<User> sortedUsers = users.stream()
+                .sorted(Comparator.comparing(
+                        user -> {
+                            String name = user.getFirstName();
+                            if (name == null || name.trim().isEmpty()) {
+                                return user.getUsername() != null ? user.getUsername() : "";
+                            }
+                            return name;
+                        },
+                        String.CASE_INSENSITIVE_ORDER
+                ))
+                .collect(Collectors.toList());
 
         int totalPages = (int) Math.ceil((double) users.size() / PAGE_SIZE_FIVE);
         if (page < 0) page = 0;
@@ -251,7 +350,7 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
 
         int start = page * PAGE_SIZE_FIVE;
         int end = Math.min(start + PAGE_SIZE_FIVE, users.size());
-        List<User> subList = users.subList(start, end);
+        List<User> subList = sortedUsers.subList(start, end);
 
         InlineKeyboardMarkup markup = adminKeyboard.getUsersListKeyboard(subList, page, totalPages);
 
@@ -270,45 +369,26 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
 
     private void showAllActiveAppointments(Long chatId, Integer messageId, int page) {
         List<Appointment> appointments = adminService.getAllActiveAppointments();
-        if (appointments.isEmpty()) {
-            notificationService.sendOrEditMessage(chatId, messageId,
-                    "Нет активных записей.", adminKeyboard.backToAdminMenu());
-            return;
-        }
-        int totalPages = (int) Math.ceil((double) appointments.size() / PAGE_SIZE_FIVE);
-        if (page < 0) page = 0;
-        if (page >= totalPages) page = totalPages - 1;
-
-        int start = page * PAGE_SIZE_FIVE;
-        int end = Math.min(start + PAGE_SIZE_FIVE, appointments.size());
-
-        List<Appointment> subList = appointments.subList(start, end);
-        for (Appointment a : subList) {
-            User client = a.getUser();
-            String username = client.getUsername() != null ? client.getUsername() : "нет nickname";
-            String phone = client.getClientPhoneNumber();
-
-            // Формируем текст для одной записи
-            String text = "🔹 " +
-                    username + " — " +
-                    a.getDateTime().format(DATE_FORMAT) + " в " +
-                    a.getDateTime().format(TIME_FORMAT) + " " +
-                    "т." + phone + "\n";
-
-            // Создаём клавиатуру для этой записи
-            InlineKeyboardMarkup markup = adminKeyboard.adminCancelAppointmentButton(a.getId(), a.getDateTime());
-
-            // Отправляем **отдельное сообщение** для каждой записи
-            notificationService.sendOrEditMessage(chatId, null, text, markup);
-        }
+        showAppointments(chatId, messageId, AppointmentPeriod.ALL, appointments, page);
     }
 
+    private void showAllAppointmentsToday(Long chatId, Integer messageId) {
+        List<Appointment> todayAppointments = adminService.getAppointmentsToday();
+        showAppointments(chatId, messageId, AppointmentPeriod.TODAY, todayAppointments, 0);
+    }
+
+    private void showAllAppointmentsTomorrow(Long chatId, Integer messageId) {
+        List<Appointment> tomorrowAppointments = adminService.getAppointmentsTomorrow();
+        showAppointments(chatId, messageId, AppointmentPeriod.TOMORROW, tomorrowAppointments, 0);
+    }
+
+
     private void createAppointmentByAdmin(Long chatId, Integer messageId) {
+        notificationService.deleteMessage(chatId, messageId);
         appointmentService.clearUserState(chatId);
         userSessionService.setRole(chatId, "ADMIN");
-        appointmentService.setAdminState(chatId, AdminAppointmentState.AWAITING_NAME);
-
-        notificationService.sendOrEditMessage(chatId, messageId, "👤 Введите имя клиента:", null);
+        appointmentService.setAdminState(chatId, AdminAppointmentState.ADM_AWAITING_DATE);
+        sendDateSelectionForAdmin(chatId);
     }
 
     private String getDayName(int dayOfWeek) {
@@ -323,5 +403,91 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             default -> "Неизвестный день";
         };
 
+    }
+
+    private void sendDateSelectionForAdmin(Long chatId) {
+        LocalDate today = LocalDate.now();
+        List<LocalDate> availableDates = new ArrayList<>();
+        for (int i = 0; i < 14; i++) { // даём больше дней админу
+            LocalDate date = today.plusDays(i);
+            if (appointmentService.isWorkingDay(date)) {
+                List<LocalDateTime> slots = appointmentService.getAvailableTimeSlots(date.atStartOfDay());
+                if (!slots.isEmpty()) {
+                    availableDates.add(date);
+                }
+            }
+        }
+
+        InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates, UserRole.ADMIN);
+        notificationService.sendOrEditMessage(chatId, null, "📅 Выберите дату для клиента:", markup);
+    }
+
+    private void showAppointments(Long chatId, Integer messageId,
+                                  AppointmentPeriod period, List<Appointment> appointments, int page) {
+        if (appointments.isEmpty()) {
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(
+                    adminKeyboard.backToAppointmentsMenu()
+            ));
+            notificationService.sendOrEditMessage(chatId, messageId, period.getEmptyMessage(), markup);
+            return;
+        }
+
+        List<Appointment> sortedAppointments = appointments.stream()
+                .sorted(Comparator.comparing(Appointment::getDateTime))
+                .toList();
+
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        int totalPages;
+        int start;
+        int end;
+
+        if (period == AppointmentPeriod.ALL) {
+            totalPages = (int) Math.ceil((double) sortedAppointments.size() / PAGE_SIZE_FIVE);
+            int clampedPage = Math.max(0, Math.min(page, totalPages - 1));
+            start = clampedPage * PAGE_SIZE_FIVE;
+            end = Math.min(start + PAGE_SIZE_FIVE, sortedAppointments.size());
+
+            String title = period.getTitle() + " (стр. " + (clampedPage + 1) + "/" + totalPages + ")";
+            StringBuilder sb = new StringBuilder("📋 *" + title + "*\n\n");
+            log.info("Найдено активных записей ({}): {}", period, sortedAppointments.size());
+
+            List<Appointment> pageAppointments = sortedAppointments.subList(start, end);
+            rows.addAll(adminKeyboard.createAppointmentRows(pageAppointments));
+
+            if (totalPages > 1) {
+                List<InlineKeyboardButton> paginationButtons = new ArrayList<>();
+                if (clampedPage > 0) {
+                    paginationButtons.add(InlineKeyboardButton.builder()
+                            .text("⬅️ Назад")
+                            .callbackData("admin:appointments:page_" + (clampedPage - 1))
+                            .build());
+                }
+                paginationButtons.add(InlineKeyboardButton.builder()
+                        .text((clampedPage + 1) + "/" + totalPages)
+                        .callbackData("noop")
+                        .build());
+                if (clampedPage < totalPages - 1) {
+                    paginationButtons.add(InlineKeyboardButton.builder()
+                            .text("Вперёд ➡️")
+                            .callbackData("admin:appointments:page_" + (clampedPage + 1))
+                            .build());
+                }
+                rows.add(new InlineKeyboardRow(paginationButtons));
+            }
+
+            rows.add(adminKeyboard.backToAppointmentsMenu());
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup(rows);
+            notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
+        } else {
+            // Для TODAY / TOMORROW — без пагинации
+            StringBuilder sb = new StringBuilder("📋 *" + period.getTitle() + "*\n\n");
+            log.info("Найдено активных записей ({}): {}", period, sortedAppointments.size());
+
+            rows.addAll(adminKeyboard.createAppointmentRows(sortedAppointments));
+            rows.add(adminKeyboard.backToAppointmentsMenu());
+
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup(rows);
+            notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
+        }
     }
 }

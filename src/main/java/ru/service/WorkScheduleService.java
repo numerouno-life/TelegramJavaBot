@@ -22,4 +22,6 @@ public interface WorkScheduleService {
     List<WorkSchedule> getAllWorkSchedules();
 
     List<WorkSchedule> getAllWorkSchedule();
+
+    void deleteOverrideByDate(LocalDate date);
 }

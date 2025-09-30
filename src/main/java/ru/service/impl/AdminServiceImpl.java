@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import ru.model.Appointment;
 import ru.model.User;
 import ru.model.enums.StatusAppointment;
+import ru.model.enums.UserRole;
 import ru.repository.AppointmentRepository;
 import ru.repository.UserRepository;
 import ru.service.AdminService;
@@ -39,12 +41,18 @@ public class AdminServiceImpl implements AdminService {
                 .toList();
     }
 
+    @Override
+    public List<Appointment> getAllAppointments() {
+        return appointmentRepository.findAll();
+    }
+
     // Записи на конкретный день
     @Transactional(readOnly = true)
     public List<Appointment> getAppointmentsByDate(LocalDateTime dateTime) {
         LocalDateTime startOfDay = dateTime.toLocalDate().atStartOfDay();
         LocalDateTime endOfDay = dateTime.toLocalDate().atTime(23, 59);
-        return appointmentRepository.findByDateTimeBetweenAndStatusNotOrderByDateTimeAsc(startOfDay, endOfDay,
+        log.info("Поиск записей на дату: {} (с {} по {})", dateTime.toLocalDate(), startOfDay, endOfDay);
+        return appointmentRepository.findByDateTimeBetweenAndStatusOrderByDateTimeAsc(startOfDay, endOfDay,
                 StatusAppointment.ACTIVE);
     }
 
@@ -79,17 +87,17 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public void blockUser(Long userId) {
-        userRepository.findById(userId).ifPresent(user -> {
-            user.setIsBlocked(true);
-            userRepository.save(user);
-        });
+        User user = userRepository.findByTelegramId(userId).orElseThrow();
+        user.setIsBlocked(true);
+        userRepository.save(user);
+        log.info("Пользователь {} заблокирован, isBlocked={}", user, user.getIsBlocked());
     }
 
     // разблокировка пользователя
     @Override
     @Transactional
     public void unblockUser(Long userId) {
-        userRepository.findById(userId).ifPresent(user -> {
+        userRepository.findByTelegramId(userId).ifPresent(user -> {
             user.setIsBlocked(false);
             userRepository.save(user);
         });
@@ -122,26 +130,15 @@ public class AdminServiceImpl implements AdminService {
                 .filter(slot -> slot.isAfter(LocalDateTime.now()))
                 .toList();
 
-        InlineKeyboardMarkup markup = keyboardFactory.timeSelectionKeyboard(date, availableSlots);
-
-        notificationService.sendOrEditMessage(chatId, messageId,
-                "Доступное время на " + date.format(DateTimeFormatter.ofPattern("dd.MM (E)")) + ":\n🟢 - свободно",
-                markup
-        );
+        InlineKeyboardMarkup markup = keyboardFactory.timeSelectionKeyboard(date, availableSlots, UserRole.ADMIN);
+        String text = "Доступное время на " + date.format(DateTimeFormatter.ofPattern("dd.MM (E)")) + ":\n🟢 - свободно";
+        Message sentMessage = notificationService.sendMessageAndReturn(chatId, text, markup);
+        appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
     }
 
 
 }
-// • ✅ Записать пользователя +
-// • ✅ Отменить запись +
-// • ✅ Блокировка/разблокировка пользователей +
-//• ✅ Список заблокированных пользователей +
-// • ✅ Просмотр всех записей +
-// • ✅ Редактирование рабочего времени
-// • ✅ Редактирование рабочих дней
-// • ✅ Показать список записей по дате +
-//
+
+
 //Дополнительные идеи (на будущее):
-// • Уведомления о записи (за день до)
 // • Статистика: сколько записей в день/неделю
-// • Лимит записей на день

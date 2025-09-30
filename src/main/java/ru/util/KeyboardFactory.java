@@ -1,9 +1,11 @@
 package ru.util;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
+import ru.model.enums.UserRole;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,6 +18,7 @@ import java.util.Locale;
 import static ru.util.BotConstants.*;
 
 @Component
+@Slf4j
 public class KeyboardFactory {
 
     public InlineKeyboardMarkup mainMenu() {
@@ -87,7 +90,8 @@ public class KeyboardFactory {
     }
 
     // Клавиатура выбора времени
-    public InlineKeyboardMarkup timeSelectionKeyboard(LocalDate date, List<LocalDateTime> availableSlots) {
+    public InlineKeyboardMarkup timeSelectionKeyboard(LocalDate date, List<LocalDateTime> availableSlots,
+                                                      UserRole userRole) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         InlineKeyboardRow currentRow = new InlineKeyboardRow();
 
@@ -110,7 +114,12 @@ public class KeyboardFactory {
         }
 
         // Кнопка "Назад" к датам
-        rows.add(backButton("⬅️ Назад", "back_to_dates").getKeyboard().get(0));
+        if (userRole == UserRole.USER) {
+            rows.add(backButton("⬅️ Назад", "back_to_dates").getKeyboard().get(0));
+        }
+        if (userRole == UserRole.ADMIN) {
+            rows.add(backButton("⬅️ Назад", "admin_back").getKeyboard().get(0));
+        }
 
         return new InlineKeyboardMarkup(rows);
     }
@@ -159,7 +168,7 @@ public class KeyboardFactory {
     }
 
     // Клавиатура выбора даты
-    public InlineKeyboardMarkup dateSelectionKeyboard(List<LocalDate> availableDates) {
+    public InlineKeyboardMarkup dateSelectionKeyboard(List<LocalDate> availableDates, UserRole userRole) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru"));
 
@@ -168,7 +177,12 @@ public class KeyboardFactory {
         }
 
         // Кнопка "Назад" к меню
-        rows.add(backButton("⬅️ Назад", "back_to_menu").getKeyboard().get(0));
+        if (userRole == UserRole.USER) {
+            rows.add(backButton("⬅️ Назад в меню", "back_to_menu").getKeyboard().get(0));
+        }
+        if (userRole == UserRole.ADMIN) {
+            rows.add(backButton("⬅️ Назад в меню записей", "admin:menu:appointments").getKeyboard().get(0));
+        }
 
         return new InlineKeyboardMarkup(rows);
     }

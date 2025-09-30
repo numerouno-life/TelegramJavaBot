@@ -8,6 +8,7 @@ import ru.model.enums.StatusAppointment;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 
@@ -22,12 +23,14 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     List<Appointment> findByDateTimeBetweenOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end);
 
     // Активные записи на конкретную дату
-    List<Appointment> findByDateTimeBetweenAndStatusNotOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end,
-                                                                          StatusAppointment statusAppointment);
+    List<Appointment> findByDateTimeBetweenAndStatusOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end,
+                                                                       StatusAppointment statusAppointment);
 
     @Query("SELECT COUNT(a) = 0 FROM Appointment a " +
             "WHERE a.dateTime = :dateTime " +
             "AND a.user.telegramId = :userId " +
             "AND a.status != 'CANCELED'")
     boolean isAvailableForUser(@Param("dateTime") LocalDateTime dateTime, @Param("userId") Long userId);
+
+    Optional<Appointment> findTopByUserTelegramIdOrderByDateTimeDesc(Long chatId);
 }

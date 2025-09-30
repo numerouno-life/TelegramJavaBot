@@ -5,10 +5,13 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
+import ru.model.Appointment;
 import ru.model.User;
+import ru.model.WorkDaysOverride;
 import ru.model.WorkSchedule;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,13 +25,10 @@ public class AdminKeyboard {
 
     public InlineKeyboardMarkup getMainAdminMenu() {
         return new InlineKeyboardMarkup(List.of(
-                keyboardFactory.row(CMD_ALL_APPOINTMENTS, "admin_appointments"),
-                keyboardFactory.row(CMD_CREATE_APPOINTMENT_ADMIN, "admin_create_appointment"),
+                keyboardFactory.row("📋 Записи", "admin:menu:appointments"),
+                keyboardFactory.row(CMD_ADMIN_SCHEDULE_MENU, "admin:menu:schedule"),
                 keyboardFactory.row(CMD_ALL_USERS, "admin_show_users"),
-                keyboardFactory.row(CMD_ADMIN_SCHEDULE_MENU, "admin:schedule:menu"),
-                keyboardFactory.row(CMD_SHOW_STATS, "admin_stats"),
-                keyboardFactory.row(CMD_ADMIN_EDIT_WORK_SCHEDULE, "admin:edit:schedule")
-
+                keyboardFactory.row(CMD_SHOW_STATS, "admin_stats")
         ));
     }
 
@@ -36,16 +36,38 @@ public class AdminKeyboard {
         return new InlineKeyboardMarkup(List.of(
                 keyboardFactory.row(CMD_BLOCKED_USER, "admin_block_"),
                 keyboardFactory.row(CMD_UNBLOCKED_USER, "admin_unblock_"),
-                keyboardFactory.row(CMD_ADMIN_BACK, "admin:back")
+                keyboardFactory.row(CMD_ADMIN_BACK, "admin_back")
+        ));
+    }
+
+    public InlineKeyboardMarkup getAppointmentsSubMenu() {
+        return new InlineKeyboardMarkup(List.of(
+                keyboardFactory.row(CMD_ALL_APPOINTMENTS, "admin_appointments"),
+                keyboardFactory.row(CMD_ADMIN_APPOINTMENTS_TODAY, "all:today:app"),
+                keyboardFactory.row(CMD_ADMIN_APPOINTMENTS_TOMORROW, "all:tomorrow:app"),
+                keyboardFactory.row(CMD_CREATE_APPOINTMENT_ADMIN, "admin_create_appointment"),
+                keyboardFactory.row(CMD_ADMIN_BACK, "admin_back")
+        ));
+    }
+
+    public InlineKeyboardMarkup getScheduleSubMenu() {
+        return new InlineKeyboardMarkup(List.of(
+                keyboardFactory.row(CMD_ADMIN_SCHEDULE_MENU, "admin:schedule:menu"),
+                keyboardFactory.row(CMD_ADMIN_EDIT_WORK_SCHEDULE, "admin:edit:schedule"),
+                keyboardFactory.row(CMD_ADMIN_ALL_OVERRIDES, "admin:overrides"),
+                keyboardFactory.row(CMD_ADMIN_BACK, "admin_back")
         ));
     }
 
     public InlineKeyboardMarkup getUsersListKeyboard(List<User> users, int page, int totalPages) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
+        List<User> userWithId = users.stream()
+                .filter(user -> user.getTelegramId() != null)
+                .toList();
 
-        for (User user : users) {
+        for (User user : userWithId) {
             String userInfo = String.format("👤 %s (@%s)",
-                    user.getFirstName(),
+                    user.getFirstName() != null ? user.getFirstName() : "Без имени",
                     user.getUsername() != null ? user.getUsername() : "нет username");
 
             InlineKeyboardButton userButton = InlineKeyboardButton.builder()
@@ -77,7 +99,7 @@ public class AdminKeyboard {
 
             paginationButtons.add(InlineKeyboardButton.builder()
                     .text((page + 1) + "/" + totalPages)
-                    .callbackData("admin_users_page_info")
+                    .callbackData("noop")
                     .build());
 
             if (page < totalPages - 1) {
@@ -112,8 +134,18 @@ public class AdminKeyboard {
     }
 
     // Кнопка назад в админ меню
-    public InlineKeyboardMarkup backToAdminMenu() {
-        return new InlineKeyboardMarkup(List.of(keyboardFactory.row("⬅️ Назад в меню", "admin_back")));
+    public InlineKeyboardRow backToAdminMenu() {
+        return keyboardFactory.row("⬅️ Назад в меню", "admin_back");
+    }
+
+    // Кнопка назад в меню записей
+    public InlineKeyboardRow backToAppointmentsMenu() {
+        return keyboardFactory.row("⬅️ Назад в меню записей", "admin:menu:appointments");
+    }
+
+    public InlineKeyboardRow backToScheduleMenu() {
+        return new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton("⬅️ Назад", "admin:menu:schedule")));
     }
 
     public InlineKeyboardMarkup getWorkScheduleMenu(List<WorkSchedule> schedules) {
@@ -129,9 +161,7 @@ public class AdminKeyboard {
             rows.add(new InlineKeyboardRow(List.of(button)));
         }
 
-        rows.add(new InlineKeyboardRow(List.of(
-                keyboardFactory.createButton("⬅️ Назад", "admin_back")
-        )));
+        rows.add(backToScheduleMenu());
 
         return new InlineKeyboardMarkup(rows);
     }
@@ -155,10 +185,9 @@ public class AdminKeyboard {
         String callback = "admin:save:day_" + dayOfWeek + "_null_null_false";
         rows.add(new InlineKeyboardRow(List.of(keyboardFactory.createButton("❌ Сделать выходным", callback))));
 
-// Назад
-        rows.add(new InlineKeyboardRow(List.of(
-                keyboardFactory.createButton("⬅️ Назад", "admin:back:schedule")
-        )));
+        // Назад в меню расписания
+        rows.add(backToScheduleMenu());
+
         return new InlineKeyboardMarkup(rows);
     }
 
@@ -173,5 +202,40 @@ public class AdminKeyboard {
             case 7 -> "Вс";
             default -> "?";
         };
+    }
+
+    // Клавиатура для исключения дней
+    public InlineKeyboardMarkup getOverridesMenu(List<WorkDaysOverride> workDaysOverrides) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        for (WorkDaysOverride o : workDaysOverrides) {
+            String text = "🗑 " + o.getDate().format(DateTimeFormatter.ofPattern("dd.MM"));
+            String callback = "admin:override:delete_" + o.getDate();
+            rows.add(new InlineKeyboardRow(List.of(
+                    keyboardFactory.createButton(text, callback)
+            )));
+        }
+        rows.add(new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton(CMD_ADMIN_ADD_OVERRIDE, "admin:override:add"))));
+        rows.add(backToScheduleMenu());
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    //метод для создания строк с записями
+    public List<InlineKeyboardRow> createAppointmentRows(List<Appointment> appointments) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        for (Appointment a : appointments) {
+            User client = a.getUser();
+
+            String buttonText = a.getDateTime().format(DateTimeFormatter.ofPattern("dd.MM"))
+                    + "-" + a.getDateTime().format(TIME_FORMAT)
+                    + "👤" + client.getFirstName() + " ❌Отменить";
+            InlineKeyboardButton cancelButton = InlineKeyboardButton.builder()
+                    .text(buttonText)
+                    .callbackData("admin_cancel_" + a.getId())
+                    .build();
+
+            rows.add(new InlineKeyboardRow(List.of(cancelButton)));
+        }
+        return rows;
     }
 }

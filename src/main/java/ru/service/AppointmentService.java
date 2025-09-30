@@ -2,16 +2,18 @@ package ru.service;
 
 import ru.model.Appointment;
 import ru.model.enums.AdminAppointmentState;
+import ru.model.enums.UserAppointmentState;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface AppointmentService {
 
-    void setUserState(Long chatId, String status);
+    void setUserState(Long chatId, UserAppointmentState status);
 
-    String getUserState(Long chatId);
+    UserAppointmentState getUserState(Long chatId);
 
     void clearUserState(Long chatId);
 
@@ -63,4 +65,11 @@ public interface AppointmentService {
 
     void clearPendingDate(Long chatId);
 
+    void cancellationNoticeForAdmins(Appointment appointment);
+
+    boolean hasAppointmentInLast7Days(Long chatId, LocalDateTime newDateTime);
+
+    Appointment getLastAppointmentWithin7Days(Long chatId, LocalDateTime dateTime);
+
+    Optional<Appointment> getLastAppointment(Long chatId);
 }

@@ -22,6 +22,8 @@ public enum CallbackType {
     ADMIN_UNBLOCK_USER("admin_unblock_"),
     ADMIN_SHOW_STATS("admin_stats"),
     ADMIN_SHOW_APPOINTMENTS("admin_appointments"),
+    ADMIN_ALL_TODAY_APP("all:today:app"),
+    ADMIN_ALL_TOMORROW_APP("all:tomorrow:app"),
     ADMIN_CREATE_APPOINTMENT("admin_create_appointment"),
     ADMIN_CANCEL_APPOINTMENT("admin_cancel_"),
     ADMIN_BACK("admin_back"),
@@ -29,7 +31,13 @@ public enum CallbackType {
     ADMIN_EDIT_DAY("admin:edit:day_"),
     ADMIN_SAVE_DAY("admin:save:day_"),
     ADMIN_BACK_TO_SCHEDULE("admin:back:schedule"),
-    ADMIN_SCHEDULE_MENU("admin:schedule:menu");
+    ADMIN_SCHEDULE_MENU("admin:schedule:menu"),
+    ADMIN_MANAGE_OVERRIDES("admin:overrides"),
+    ADMIN_ADD_OVERRIDE("admin:override:add"),
+    ADMIN_DELETE_OVERRIDE("admin:override:delete_"),
+    ADMIN_MENU_APPOINTMENTS("admin:menu:appointments"),
+    ADMIN_MENU_SCHEDULE("admin:menu:schedule"),
+    ADMIN_APPOINTMENTS_PAGE("admin:appointments:page_");
 
 
     private final String prefix;

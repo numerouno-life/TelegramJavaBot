@@ -1,14 +1,16 @@
 package ru.service;
 
 import ru.model.enums.AdminAppointmentState;
+import ru.model.enums.UserAppointmentState;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 public interface UserSessionService {
 
-    void setUserState(Long chatId, String state);
+    void setUserState(Long chatId, UserAppointmentState state);
 
-    String getUserState(Long chatId);
+    UserAppointmentState getUserState(Long chatId);
 
     void setPendingDate(Long chatId, LocalDateTime dateTime);
 
@@ -47,4 +49,18 @@ public interface UserSessionService {
     void clearAdminState(Long chatId);
 
     void clearPendingDate(Long chatId);
+
+    void setPendingStartTime(Long chatId, LocalTime time);
+
+    LocalTime getPendingStartTime(Long chatId);
+
+    void clearPendingStartTime(Long chatId);
+
+    void setPendingEndTime(Long chatId, LocalTime time);
+
+    LocalTime getPendingEndTime(Long chatId);
+
+    void clearPendingEndTime(Long chatId);
+
+    void clearAllSessions(Long chatId);
 }

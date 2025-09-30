@@ -11,6 +11,8 @@ import java.util.Map;
 public interface AdminService {
     List<Appointment> getAllActiveAppointments();
 
+    List<Appointment> getAllAppointments();
+
     List<Appointment> getAppointmentsToday();
 
     List<Appointment> getAppointmentsTomorrow();

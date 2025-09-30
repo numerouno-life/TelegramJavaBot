@@ -119,10 +119,6 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
                                    boolean isWorking, String reason) {
         var override = workDaysOverrideRepository.findByDate(date).orElse(null);
 
-        if (override == null && !isWorking && (start == null || end == null)) {
-            return; // не создаём запись для нерабочего дня без причины
-        }
-
         if (override == null) {
             override = WorkDaysOverride.builder()
                     .date(date)
@@ -150,5 +146,11 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
     @Override
     public List<WorkSchedule> getAllWorkSchedule() {
         return workScheduleRepository.findAll();
+    }
+
+    @Override
+    @Transactional
+    public void deleteOverrideByDate(LocalDate date) {
+        workDaysOverrideRepository.deleteByDate(date);
     }
 }

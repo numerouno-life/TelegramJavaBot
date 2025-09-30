@@ -51,6 +51,8 @@ public class CallbackQueryHandler {
         return switch (type) {
             case ADMIN_SHOW_USERS,
                  ADMIN_SHOW_APPOINTMENTS,
+                 ADMIN_ALL_TODAY_APP,
+                 ADMIN_ALL_TOMORROW_APP,
                  ADMIN_CREATE_APPOINTMENT,
                  ADMIN_CANCEL_APPOINTMENT,
                  ADMIN_USERS_PAGE,
@@ -62,6 +64,12 @@ public class CallbackQueryHandler {
                  ADMIN_SAVE_DAY,
                  ADMIN_BACK_TO_SCHEDULE,
                  ADMIN_SCHEDULE_MENU,
+                 ADMIN_MANAGE_OVERRIDES,
+                 ADMIN_ADD_OVERRIDE,
+                 ADMIN_DELETE_OVERRIDE,
+                 ADMIN_MENU_APPOINTMENTS,
+                 ADMIN_MENU_SCHEDULE,
+                 ADMIN_APPOINTMENTS_PAGE,
                  ADMIN_BACK -> true;
             default -> false;
         };
