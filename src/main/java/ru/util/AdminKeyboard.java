@@ -9,6 +9,7 @@ import ru.model.Appointment;
 import ru.model.User;
 import ru.model.WorkDaysOverride;
 import ru.model.WorkSchedule;
+import ru.model.enums.UserRole;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -28,7 +29,8 @@ public class AdminKeyboard {
                 keyboardFactory.row("📋 Записи", "admin:menu:appointments"),
                 keyboardFactory.row(CMD_ADMIN_SCHEDULE_MENU, "admin:menu:schedule"),
                 keyboardFactory.row(CMD_ALL_USERS, "admin_show_users"),
-                keyboardFactory.row(CMD_SHOW_STATS, "admin_stats")
+                keyboardFactory.row(CMD_SHOW_STATS, "admin_stats"),
+                keyboardFactory.row(CMD_ADMIN_MANAGEMENT, "admin:add:new_admin")
         ));
     }
 
@@ -68,7 +70,7 @@ public class AdminKeyboard {
         for (User user : userWithId) {
             String userInfo = String.format("👤 %s (@%s)",
                     user.getFirstName() != null ? user.getFirstName() : "Без имени",
-                    user.getUsername() != null ? user.getUsername() : "нет username");
+                    user.getUsername() != null ? user.getUsername() : "нет ника");
 
             InlineKeyboardButton userButton = InlineKeyboardButton.builder()
                     .text(userInfo)
@@ -106,6 +108,64 @@ public class AdminKeyboard {
                 paginationButtons.add(InlineKeyboardButton.builder()
                         .text("Вперёд ➡️")
                         .callbackData("admin_users_page_" + (page + 1))
+                        .build());
+            }
+
+            rows.add(new InlineKeyboardRow(paginationButtons));
+        }
+
+        // возврат в меню
+        rows.add(new InlineKeyboardRow(List.of(
+                InlineKeyboardButton.builder()
+                        .text("⬅️ В админ-меню")
+                        .callbackData("admin_back")
+                        .build()
+        )));
+
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public InlineKeyboardMarkup getAdminManagementKeyboard(List<User> usersOnPage, int page, int totalPages) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        for (User user : usersOnPage) {
+            String userInfo = String.format("👤 %s (@%s)",
+                    user.getFirstName() != null ? user.getFirstName() : "Без имени",
+                    user.getUsername() != null ? user.getUsername() : "нет username");
+
+            InlineKeyboardButton userButton = InlineKeyboardButton.builder()
+                    .text(userInfo)
+                    .callbackData("noop" + user.getTelegramId())
+                    .build();
+
+            InlineKeyboardButton admButton = InlineKeyboardButton.builder()
+                    .text(user.getRole().equals(UserRole.ADMIN) ? "❌ Снять админку" : "✅ Назначить админом")
+                    .callbackData(user.getRole().equals(UserRole.ADMIN)
+                            ? "admin:delete:admin_" + user.getTelegramId()
+                            : "admin:set:new_admin_" + user.getTelegramId())
+                    .build();
+            rows.add(new InlineKeyboardRow(List.of(userButton)));
+            rows.add(new InlineKeyboardRow(List.of(admButton)));
+        }
+        // пагинация
+        if (totalPages > 1) {
+            List<InlineKeyboardButton> paginationButtons = new ArrayList<>();
+
+            if (page > 0) {
+                paginationButtons.add(InlineKeyboardButton.builder()
+                        .text("⬅️ Назад")
+                        .callbackData("admin_admins_page_" + (page - 1))
+                        .build());
+            }
+
+            paginationButtons.add(InlineKeyboardButton.builder()
+                    .text((page + 1) + "/" + totalPages)
+                    .callbackData("noop")
+                    .build());
+
+            if (page < totalPages - 1) {
+                paginationButtons.add(InlineKeyboardButton.builder()
+                        .text("Вперёд ➡️")
+                        .callbackData("admin_admins_page_" + (page + 1))
                         .build());
             }
 

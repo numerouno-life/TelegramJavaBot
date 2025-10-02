@@ -29,5 +29,7 @@ public interface AdminService {
 
     void sendTimeSelectionForAdmin(Long chatId, Integer messageId, LocalDate date);
 
+    void assignAdmin(Long userId);
 
+    void removeAdmin(Long userId);
 }

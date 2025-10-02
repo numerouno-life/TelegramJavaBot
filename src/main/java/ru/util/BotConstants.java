@@ -43,6 +43,7 @@ public class BotConstants {
     public static final String CMD_ADMIN_ADD_OVERRIDE = ICON_BOOK + " Добавить исключение";
     public static final String CMD_ADMIN_DELETE_OVERRIDE = ICON_HISTORY + " Удалить исключение";
     public static final String CMD_ADMIN_BACK_TO_OVERRIDES = ICON_BACK + " Назад к списку исключений";
+    public static final String CMD_ADMIN_MANAGEMENT = ICON_SETTINGS + " Меню назначения админов";
 
     // Форматы
     public static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");

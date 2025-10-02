@@ -136,9 +136,26 @@ public class AdminServiceImpl implements AdminService {
         appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
     }
 
+    @Override
+    @Transactional
+    public void assignAdmin(Long userId) {
+        userRepository.findByTelegramId(userId).ifPresent(user -> {
+            log.info("🔄 Изменение роли с {}, на ADMIN для пользователя {}", user.getRole(), userId);
+            user.setRole(UserRole.ADMIN);
+            userRepository.save(user);
+            log.info("🔄 Роль пользователя {} успешно изменена", userId);
+        });
+    }
+
+    @Override
+    @Transactional
+    public void removeAdmin(Long userId) {
+        userRepository.findByTelegramId(userId).ifPresent(user -> {
+            log.info("🔄 Изменение роли с {}, на USER для пользователя {}", user.getRole(), userId);
+            user.setRole(UserRole.USER);
+            userRepository.save(user);
+            log.info("🔄 Роль пользователя {} успешно изменена", userId);
+        });
+    }
 
 }
-
-
-//Дополнительные идеи (на будущее):
-// • Статистика: сколько записей в день/неделю

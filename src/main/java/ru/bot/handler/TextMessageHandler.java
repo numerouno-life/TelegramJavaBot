@@ -44,6 +44,10 @@ public class TextMessageHandler {
         Long chatId = message.getChatId();
         String text = message.getText();
         String role = userSessionService.getRole(chatId);
+        if (userService.isBlocked(chatId)) {
+            notificationService.sendMessage(chatId, "❌ Ваш аккаунт заблокирован. Обратитесь к администратору.");
+            return;
+        }
         User from = userService.getOrCreateUser(
                 chatId,
                 message.getFrom().getUserName(),
@@ -154,13 +158,14 @@ public class TextMessageHandler {
 
     private void sendWelcome(Long chatId) {
         String welcome = """
-                👋 Добро пожаловать в салон красоты *SH*!
+                Привет! 👋 Рады тебя видеть в нашем барбершопе!
                 
                 Вы можете:
-                • Записаться на стрижку
-                • Посмотреть свои актуальные записи
-                • Посмотреть историю записей
-                • Узнать контакты
+                • 🗓️ Записаться на стрижку
+                • 📲 Глянуть мои ближайшие записи
+                • 📜 Посмотреть историю записей
+                • 📍 Узнать, где мы находимся
+                • 🎮 Залететь в FiFa-26 за скидкой! 🏆 (Готов проиграть?)
                 """;
         notificationService.sendMainMenu(chatId, welcome);
     }
@@ -318,7 +323,8 @@ public class TextMessageHandler {
         }
 
         InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates, UserRole.USER);
-        notificationService.sendOrEditMessage(chatId, messageId, "Выберите дату записи:", markup);
+        Message message = notificationService.sendMessageAndReturn(chatId, "Выберите дату записи:", markup);
+        appointmentService.setPendingMessageId(chatId, message.getMessageId());
     }
 
     // Чистка состояния при ошибках

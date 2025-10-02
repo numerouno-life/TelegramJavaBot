@@ -1,8 +1,6 @@
 package ru.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import ru.model.Appointment;
 import ru.model.enums.StatusAppointment;
 
@@ -26,11 +24,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     List<Appointment> findByDateTimeBetweenAndStatusOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end,
                                                                        StatusAppointment statusAppointment);
 
-    @Query("SELECT COUNT(a) = 0 FROM Appointment a " +
-            "WHERE a.dateTime = :dateTime " +
-            "AND a.user.telegramId = :userId " +
-            "AND a.status != 'CANCELED'")
-    boolean isAvailableForUser(@Param("dateTime") LocalDateTime dateTime, @Param("userId") Long userId);
-
     Optional<Appointment> findTopByUserTelegramIdOrderByDateTimeDesc(Long chatId);
+
+    Optional<Appointment> findTopByUserTelegramIdAndStatusNotOrderByDateTimeDesc(
+            Long telegramId, StatusAppointment status);
 }

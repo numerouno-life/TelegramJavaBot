@@ -33,6 +33,7 @@ public class CallbackQueryHandler {
             CallbackType type = CallbackType.fromString(data);
             Long userId = callbackQuery.getFrom().getId();
             boolean isAdmin = userService.isAdmin(userId);
+            boolean isBlocked = userService.isBlocked(userId);
 
             if (isAdmin && isAdministrativeCallback(type)) {
                 adminCallbackHandler.handleAdminCallback(callbackQuery);
@@ -70,6 +71,9 @@ public class CallbackQueryHandler {
                  ADMIN_MENU_APPOINTMENTS,
                  ADMIN_MENU_SCHEDULE,
                  ADMIN_APPOINTMENTS_PAGE,
+                 ADMIN_ADD_NEW_ADMIN,
+                 ADMIN_SET_NEW_ADMIN,
+                 ADMIN_DELETE_ADMIN,
                  ADMIN_BACK -> true;
             default -> false;
         };

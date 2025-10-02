@@ -9,7 +9,7 @@ public interface UserService {
 
     User getOrCreateUser(Long telegramId, String username, String firstName, String lastName);
 
-    User updateUserDetails(Long telegramId,String name, String phone);
+    User updateUserDetails(Long telegramId, String name, String phone);
 
     Optional<User> findByTelegramId(Long telegramId);
 
@@ -25,5 +25,6 @@ public interface UserService {
 
     User createClientOnly(String name, String phone);
 
-    void save(User user);
+    boolean isBlocked(Long userId);
+
 }

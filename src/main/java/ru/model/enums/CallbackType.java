@@ -37,7 +37,11 @@ public enum CallbackType {
     ADMIN_DELETE_OVERRIDE("admin:override:delete_"),
     ADMIN_MENU_APPOINTMENTS("admin:menu:appointments"),
     ADMIN_MENU_SCHEDULE("admin:menu:schedule"),
-    ADMIN_APPOINTMENTS_PAGE("admin:appointments:page_");
+    ADMIN_APPOINTMENTS_PAGE("admin:appointments:page_"),
+    ADMIN_ADD_NEW_ADMIN("admin:add:new_admin"),
+    ADMIN_SET_NEW_ADMIN("admin:set:new_admin_"),
+    ADMIN_DELETE_ADMIN("admin:delete:admin_"),
+    ADMIN_ADMINS_PAGE("admin_admins_page_");
 
 
     private final String prefix;

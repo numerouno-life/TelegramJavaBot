@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import ru.error.exception.AppointmentNotFoundException;
 import ru.model.Appointment;
 import ru.model.User;
@@ -18,6 +19,7 @@ import ru.service.AppointmentService;
 import ru.service.NotificationService;
 import ru.service.UserSessionService;
 import ru.service.WorkScheduleService;
+import ru.util.KeyboardFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -40,6 +42,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final UserSessionService userSessionService;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final KeyboardFactory keyboardFactory;
 
     @Override
     public void setUserState(Long chatId, UserAppointmentState state) {
@@ -317,18 +320,19 @@ public class AppointmentServiceImpl implements AppointmentService {
                 appointment.getUser().getClientPhoneNumber(),
                 appointment.getDateTime().format(DATE_FORMAT) + "-" + appointment.getDateTime().format(TIME_FORMAT)
         );
+        InlineKeyboardMarkup backButton = keyboardFactory.backButton("⬅️ Назад", "back_to_menu");
 
         for (User admin : admins) {
             if (admin.getTelegramId() != null && !admin.getIsBlocked()) {
-                notificationService.sendMessage(admin.getTelegramId(), msg);
+                notificationService.sendOrEditMessage(admin.getTelegramId(), null, msg, backButton);
             }
         }
     }
 
     @Override
     @Transactional(readOnly = true)
-    public boolean hasAppointmentInLast7Days(Long chatId, LocalDateTime newDateTime) {
-        LocalDateTime sevenDaysAgo = newDateTime.minusDays(7);
+    public boolean hasAppointmentInLast6Days(Long chatId, LocalDateTime newDateTime) {
+        LocalDateTime sevenDaysAgo = newDateTime.minusDays(6);
         return appointmentRepository.findByUserTelegramId(chatId).stream()
                 .anyMatch(app -> app.getStatus() == StatusAppointment.ACTIVE &&
                         !app.getDateTime().isBefore(sevenDaysAgo) &&
@@ -338,20 +342,23 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public Appointment getLastAppointmentWithin7Days(Long chatId, LocalDateTime newDateTime) {
-        LocalDateTime sevenDaysAgo = newDateTime.minusDays(7);
+        LocalDateTime sixDaysAgo = newDateTime.minusDays(6);
         return appointmentRepository.findByUserTelegramId(chatId).stream()
                 .filter(app -> app.getStatus() == StatusAppointment.ACTIVE ||
                         app.getStatus() == StatusAppointment.CONFIRMED)
                 .filter(app -> app.getDateTime().isBefore(newDateTime)) // прошедшие или текущие
-                .filter(app -> !app.getDateTime().isBefore(sevenDaysAgo)) // не старше 7 дней
+                .filter(app -> !app.getDateTime().isBefore(sixDaysAgo)) // не старше 6 дней
                 .max(Comparator.comparing(Appointment::getDateTime))
                 .orElse(null);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Appointment> getLastAppointment(Long chatId) {
         return appointmentRepository
-                .findTopByUserTelegramIdOrderByDateTimeDesc(chatId);
+                .findTopByUserTelegramIdAndStatusNotOrderByDateTimeDesc(
+                        chatId, StatusAppointment.CANCELED
+                );
     }
 
 }

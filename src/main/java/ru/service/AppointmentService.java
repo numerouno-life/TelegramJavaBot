@@ -67,7 +67,7 @@ public interface AppointmentService {
 
     void cancellationNoticeForAdmins(Appointment appointment);
 
-    boolean hasAppointmentInLast7Days(Long chatId, LocalDateTime newDateTime);
+    boolean hasAppointmentInLast6Days(Long chatId, LocalDateTime newDateTime);
 
     Appointment getLastAppointmentWithin7Days(Long chatId, LocalDateTime dateTime);
 

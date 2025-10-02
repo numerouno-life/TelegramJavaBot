@@ -77,6 +77,18 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                     int page = Integer.parseInt(data.substring("admin_users_page_".length()));
                     showUsers(chatId, messageId, page);
                 }
+                case ADMIN_ADMINS_PAGE -> {
+                    int page = Integer.parseInt(data.substring("admin_admins_page_".length()));
+                    setNewAdmin(chatId, messageId, page);
+                }
+                case ADMIN_SET_NEW_ADMIN -> {
+                    Long userId = Long.parseLong(data.substring("admin:set:new_admin_".length()));
+                    assignAdmin(chatId, messageId, userId);
+                }
+                case ADMIN_DELETE_ADMIN -> {
+                    Long userId = Long.parseLong(data.substring("admin:delete:admin_".length()));
+                    removeAdmin(chatId, messageId, userId);
+                }
                 case ADMIN_BLOCK_USER -> {
                     Long userId = Long.parseLong(data.substring("admin_block_".length()));
                     blockUser(chatId, messageId, userId);
@@ -122,6 +134,7 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                     int page = Integer.parseInt(data.substring("admin:appointments:page_".length()));
                     showAllActiveAppointments(chatId, messageId, page);
                 }
+                case ADMIN_ADD_NEW_ADMIN -> setNewAdmin(chatId, messageId, 0);
                 case UNKNOWN -> log.warn("Unknown admin callback: {}", data);
                 default -> log.debug("Callback not handled by admin: {}", data);
             }
@@ -131,6 +144,79 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Ошибка при обработке запроса. Попробуйте снова.", null);
         }
+    }
+
+    private void removeAdmin(Long chatId, Integer messageId, Long userId) {
+        if (userId == null) {
+            log.warn("Попытка удаления администратора с null id");
+            return;
+        }
+        adminService.removeAdmin(userId);
+        log.info("Админка снята у пользователя {}", userId);
+        userSessionService.clearUserState(chatId);
+        setNewAdmin(chatId, messageId, 0);
+    }
+
+    private void assignAdmin(Long chatId, Integer messageId, Long userId) {
+        if (userId == null) {
+            log.warn("Попытка назначения администратора с null id");
+            return;
+        }
+        adminService.assignAdmin(userId);
+        log.info("Админка назначена пользователю {}", userId);
+        userSessionService.clearUserState(chatId);
+        setNewAdmin(chatId, messageId, 0);
+    }
+
+    private void setNewAdmin(Long chatId, Integer messageId, int page) {
+        log.debug("Назначение нового админа: {}", chatId);
+        if (!userService.isAdmin(chatId)) {
+            notificationService.sendOrEditMessage(chatId, messageId,"❌ Доступ запрещён.", null);
+            log.warn("Пользователь с id {} не является админом", chatId);
+            return;
+        }
+        List<User> telegramUsers = userService.getAllUsers().stream()
+                .filter(u -> u.getTelegramId() != null)
+                .toList();
+
+        if (telegramUsers.isEmpty()) {
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "❌ Нет пользователей для назначения админа.", null);
+            return;
+        }
+        List<User> sortedUsers = telegramUsers.stream()
+                .sorted(Comparator.comparing(
+                        user -> {
+                            String name = user.getFirstName();
+                            if (name == null || name.trim().isEmpty()) {
+                                return user.getUsername() != null ? user.getUsername() : "";
+                            }
+                            return name;
+                        },
+                        String.CASE_INSENSITIVE_ORDER
+                ))
+                .collect(Collectors.toList());
+        int totalPages = (int) Math.ceil((double) sortedUsers.size() / PAGE_SIZE_FIVE);
+        if (page < 0) page = 0;
+        if (page >= totalPages) page = totalPages - 1;
+
+        int start = page * PAGE_SIZE_FIVE;
+        int end = Math.min(start + PAGE_SIZE_FIVE, sortedUsers.size());
+        List<User> subList = sortedUsers.subList(start, end);
+
+        InlineKeyboardMarkup markup = adminKeyboard.getAdminManagementKeyboard(subList, page, totalPages);
+
+        StringBuilder sb = new StringBuilder("👑 *Управление администраторами* (")
+                .append(page + 1).append("/").append(totalPages).append("):\n\n");
+
+        for (User u : subList) {
+            sb.append("• ").append(u.getFirstName())
+                    .append(" (@").append(u.getUsername() != null ? u.getUsername() : "нет").append(")")
+                    .append(u.getIsBlocked() ? " 🚫" : " ✅")
+                    .append("\n");
+        }
+
+        notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
     }
 
     private void deleteOverride(Long chatId, Integer messageId, LocalDate date) {
@@ -331,7 +417,10 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                     adminKeyboard.getMainAdminMenu());
             return;
         }
-        List<User> sortedUsers = users.stream()
+        List<User> telegramUsers = users.stream()
+                .filter(user -> user.getTelegramId() != null)
+                .toList();
+        List<User> sortedUsers = telegramUsers.stream()
                 .sorted(Comparator.comparing(
                         user -> {
                             String name = user.getFirstName();
@@ -344,12 +433,12 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                 ))
                 .collect(Collectors.toList());
 
-        int totalPages = (int) Math.ceil((double) users.size() / PAGE_SIZE_FIVE);
+        int totalPages = (int) Math.ceil((double) sortedUsers.size() / PAGE_SIZE_FIVE);
         if (page < 0) page = 0;
         if (page >= totalPages) page = totalPages - 1;
 
         int start = page * PAGE_SIZE_FIVE;
-        int end = Math.min(start + PAGE_SIZE_FIVE, users.size());
+        int end = Math.min(start + PAGE_SIZE_FIVE, sortedUsers.size());
         List<User> subList = sortedUsers.subList(start, end);
 
         InlineKeyboardMarkup markup = adminKeyboard.getUsersListKeyboard(subList, page, totalPages);

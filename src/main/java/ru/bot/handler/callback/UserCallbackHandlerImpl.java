@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import ru.bot.handler.TextMessageHandler;
 import ru.bot.handler.UserCallBackHandler;
@@ -40,6 +41,10 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
         Integer messageId = callbackQuery.getMessage().getMessageId();
+        if (userService.isBlocked(chatId)) {
+            notificationService.sendMessage(chatId, "❌ Ваш аккаунт заблокирован. Обратитесь к администратору.");
+            return;
+        }
 
         log.debug("Processing user callback: data='{}', type={}", data, CallbackType.fromString(data));
 
@@ -77,6 +82,7 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
     }
 
     private void sendTimeSelection(Long chatId, Integer messageId, LocalDate date) {
+        notificationService.deleteMessage(chatId, messageId);
         List<LocalDateTime> availableSlots = appointmentService.getAvailableTimeSlots(date.atStartOfDay())
                 .stream()
                 .filter(slot -> slot.isAfter(LocalDateTime.now()))
@@ -84,10 +90,11 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
 
         InlineKeyboardMarkup markup = keyboardFactory.timeSelectionKeyboard(date, availableSlots, UserRole.USER);
 
-        notificationService.sendOrEditMessage(chatId, messageId,
+        Message sentMessage = notificationService.sendMessageAndReturn(chatId,
                 "Доступное время на " + date.format(DateTimeFormatter.ofPattern("dd.MM (E)")) + ":\n🟢 - свободно",
-                markup
-        );
+                markup);
+
+        appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
     }
 
     private void showLastAppointment(Long chatId) {
@@ -101,19 +108,21 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
         Appointment last = lastOptional.get();
         LocalDateTime lastDateTime = last.getDateTime();
         LocalDateTime now = LocalDateTime.now();
+        InlineKeyboardMarkup backButton = keyboardFactory.backButton("🏠 В меню", "back_to_menu");
 
         if (lastDateTime.isBefore(now)) {
             // Прошедшая запись — кнопка отмены не нужна
-            notificationService.sendMessage(chatId,
-                    "❌ Вы уже записаны на стрижку.\n" +
+            notificationService.sendOrEditMessage(chatId, null,
+                    "❌ Вы уже были записаны на стрижку.\n" +
                             "📅 Последняя запись: " + lastDateTime.format(DATE_FORMAT) +
                             " в " + lastDateTime.format(TIME_FORMAT) +
-                            "\nПовторная запись возможна только через 7 дней после предыдущей."
+                            "\nПовторная запись возможна только через 6 дней после предыдущей.",
+                    backButton
             );
         } else {
             // Активная запись — кнопка отмены доступна
             InlineKeyboardMarkup markup = keyboardFactory.userCancelAppointmentButton(last.getId(), lastDateTime);
-            notificationService.sendMessage(chatId,
+            notificationService.sendOrEditMessage(chatId, null,
                     "❌ Вы уже записаны на стрижку.\n" +
                             "📅 Последняя запись: " + lastDateTime.format(DATE_FORMAT) +
                             " в " + lastDateTime.format(TIME_FORMAT) +
@@ -173,23 +182,24 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
 
     private void handleTimeSelection(Long chatId, Integer messageId, String data) {
         LocalDateTime selectedTime = LocalDateTime.parse(data.substring(5));
+        notificationService.deleteMessage(chatId, messageId);
         appointmentService.setPendingDate(chatId, selectedTime);
         String role = userSessionService.getRole(chatId);
         AdminAppointmentState adminState = appointmentService.getAdminState(chatId);
         boolean isAdminFlow = "ADMIN".equals(role) &&
                 (adminState == AdminAppointmentState.ADM_AWAITING_DATE);
         if (!isAdminFlow) {
-            if (appointmentService.hasAppointmentInLast7Days(chatId, selectedTime)) {
+            if (appointmentService.hasAppointmentInLast6Days(chatId, selectedTime)) {
                 Appointment last = appointmentService.getLastAppointmentWithin7Days(chatId, selectedTime);
                 String existingTime = last.getDateTime().format(
                         DateTimeFormatter.ofPattern("dd.MM.yyyy 'в' HH:mm")
                 );
                 String message = """
-                ❌ Вы уже записаны на стрижку.
+                ❌ Вы уже были записаны на стрижку.
                 
                 📅 Последняя запись: %s
                 
-                Повторная запись возможна только через 7 дней после предыдущей.
+                Повторная запись возможна только через 6 дней после предыдущей.
                 Отмените текущую запись, если хотите перенести её.
                 """.formatted(existingTime);
 
@@ -220,6 +230,11 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
     }
 
     private void handleBackToMenu(Long chatId) {
+        Integer messageId = appointmentService.getPendingMessageId(chatId);
+        if (messageId != null) {
+            notificationService.deleteMessage(chatId, messageId);
+            appointmentService.clearPendingMessageId(chatId);
+        }
         userSessionService.clearAllSessions(chatId);
         userSessionService.clearRole(chatId);
         List<Appointment> appointments = appointmentService.getUserAppointments(chatId);
@@ -277,12 +292,15 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
 
     private void deletePendingMessage(Long chatId, Integer messageId) {
         Integer pendingMessageId = appointmentService.getPendingMessageId(chatId);
-        if (pendingMessageId != null) {
+
+        if (pendingMessageId != null && !pendingMessageId.equals(messageId)) {
             notificationService.deleteMessage(chatId, pendingMessageId);
             appointmentService.clearPendingMessageId(chatId);
         }
+
         if (messageId != null) {
             notificationService.deleteMessage(chatId, messageId);
         }
     }
+
 }

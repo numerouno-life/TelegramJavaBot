@@ -28,6 +28,7 @@ public class UserServiceImpl implements UserService {
                     User newUser = User.builder()
                             .telegramId(telegramId)
                             .role(UserRole.USER)
+                            .isBlocked(false)
                             .build();
                     log.info("Создан новый пользователь: {}", newUser);
                     return newUser;
@@ -65,13 +66,16 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public boolean isBlocked(Long userId) {
+        return userRepository.findByTelegramId(userId)
+                .map(User::getIsBlocked)
+                .orElse(false);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<User> getAllUsers() {
-        if (userRepository.findAll().isEmpty()) {
-            return List.of();
-        } else {
-            return userRepository.findAll();
-        }
+        return userRepository.findAll();
     }
 
     @Override
@@ -97,11 +101,6 @@ public class UserServiceImpl implements UserService {
                             .build();
                     return userRepository.save(user);
                 });
-    }
-
-    @Override
-    public void save(User user) {
-        userRepository.save(user);
     }
 
 
