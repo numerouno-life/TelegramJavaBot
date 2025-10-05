@@ -12,6 +12,7 @@ import ru.service.UserService;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -34,13 +35,29 @@ public class UserServiceImpl implements UserService {
                     return newUser;
                 });
 
-        user.setUsername(username);
-        user.setFirstName(firstName);
-        user.setLastName(lastName);
-        log.info("Обновление пользователя: id={}, username={}, firstName={}", telegramId, username, firstName);
+        boolean changed = false;
 
-        return userRepository.save(user);
+        if (!Objects.equals(user.getUsername(), username)) {
+            user.setUsername(username);
+            changed = true;
+        }
+        if (!Objects.equals(user.getFirstName(), firstName)) {
+            user.setFirstName(firstName);
+            changed = true;
+        }
+        if (!Objects.equals(user.getLastName(), lastName)) {
+            user.setLastName(lastName);
+            changed = true;
+        }
+
+        if (changed) {
+            log.info("Обновление пользователя: id={}, username={}, firstName={}", telegramId, username, firstName);
+            return userRepository.save(user);
+        } else {
+            return user;
+        }
     }
+
 
     @Override
     @Transactional

@@ -190,7 +190,7 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
                 (adminState == AdminAppointmentState.ADM_AWAITING_DATE);
         if (!isAdminFlow) {
             if (appointmentService.hasAppointmentInLast6Days(chatId, selectedTime)) {
-                Appointment last = appointmentService.getLastAppointmentWithin7Days(chatId, selectedTime);
+                Appointment last = appointmentService.getLastAppointmentWithin6Days(chatId, selectedTime);
                 String existingTime = last.getDateTime().format(
                         DateTimeFormatter.ofPattern("dd.MM.yyyy 'в' HH:mm")
                 );

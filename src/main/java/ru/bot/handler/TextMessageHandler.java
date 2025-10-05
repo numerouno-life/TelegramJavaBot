@@ -55,7 +55,7 @@ public class TextMessageHandler {
                 message.getFrom().getLastName()
         );
 
-        if (CMD_ADMIN.equalsIgnoreCase(text)) {
+        if (CMD_ADMIN.equalsIgnoreCase(text) || CMD_ADMIN_MENU.equalsIgnoreCase(text)) {
             if (userService.isAdmin(chatId)) {
                 userSessionService.setRole(chatId, "ADMIN");
                 notificationService.sendAdminMenu(chatId, "🔐 *Админ-панель*");
@@ -206,6 +206,13 @@ public class TextMessageHandler {
             return;
         }
 
+        if (!isAdminFlow && !isValidPhone(phone)) {
+            notificationService.sendMessage(chatId, "❌ Неверный формат номера телефона. " +
+                    "Введите номер в формате +71234567890 или 89123456789");
+            appointmentService.setUserState(chatId, UserAppointmentState.STATE_AWAITING_PHONE);
+            return;
+        }
+
         try {
             User user;
             if (isAdminFlow) {
@@ -334,5 +341,9 @@ public class TextMessageHandler {
         userSessionService.clearRole(chatId);
         userSessionService.clearPendingName(chatId);
         appointmentService.clearPendingDate(chatId);
+    }
+
+    private boolean isValidPhone(String phone) {
+        return phone != null && phone.matches("^(\\+7|8)\\d{10}$");
     }
 }

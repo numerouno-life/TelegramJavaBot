@@ -26,6 +26,7 @@ public class BotConstants {
 
     // Команды админа
     public static final String CMD_ADMIN = "/admin";
+    public static final String CMD_ADMIN_MENU = "админ";
     public static final String CMD_ALL_APPOINTMENTS = ICON_LIST + " Все активные записи/отмена записи";
     public static final String CMD_ADMIN_APPOINTMENTS_TODAY = ICON_LIST + " Записи на сегодня";
     public static final String CMD_ADMIN_APPOINTMENTS_TOMORROW = ICON_LIST + " Записи на завтра";

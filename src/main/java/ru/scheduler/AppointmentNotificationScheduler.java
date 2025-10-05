@@ -24,9 +24,6 @@ public class AppointmentNotificationScheduler {
     public void scheduleNotifications(Appointment appointment) {
         LocalDateTime appointmentTime = appointment.getDateTime();
 
-        scheduleTask(appointment, LocalDateTime.now().plusSeconds(30),
-                "⏰  Тестовое Напоминаем через 30 сек!" + "(◕‿◕) \n♡♡♡♡♡♡♡♡♡♡");
-
         // Напоминание за день
         scheduleTask(appointment, appointmentTime.minusDays(1),
                 "📅 Напоминаем: завтра у вас запись на %s!");

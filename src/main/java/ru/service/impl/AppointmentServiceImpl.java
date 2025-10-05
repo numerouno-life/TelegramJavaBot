@@ -316,7 +316,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                         📅 Дата и время: %s""",
                 appointment.getUser().getFirstName(),
                 appointment.getUser().getLastName() == null ? "" : appointment.getUser().getLastName(),
-                appointment.getUser().getUsername(),
+                appointment.getUser().getUsername() == null ? "Нет NickName" : appointment.getUser().getUsername(),
                 appointment.getUser().getClientPhoneNumber(),
                 appointment.getDateTime().format(DATE_FORMAT) + "-" + appointment.getDateTime().format(TIME_FORMAT)
         );
@@ -341,7 +341,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public Appointment getLastAppointmentWithin7Days(Long chatId, LocalDateTime newDateTime) {
+    public Appointment getLastAppointmentWithin6Days(Long chatId, LocalDateTime newDateTime) {
         LocalDateTime sixDaysAgo = newDateTime.minusDays(6);
         return appointmentRepository.findByUserTelegramId(chatId).stream()
                 .filter(app -> app.getStatus() == StatusAppointment.ACTIVE ||

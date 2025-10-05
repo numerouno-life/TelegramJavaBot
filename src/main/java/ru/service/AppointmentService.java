@@ -69,7 +69,7 @@ public interface AppointmentService {
 
     boolean hasAppointmentInLast6Days(Long chatId, LocalDateTime newDateTime);
 
-    Appointment getLastAppointmentWithin7Days(Long chatId, LocalDateTime dateTime);
+    Appointment getLastAppointmentWithin6Days(Long chatId, LocalDateTime dateTime);
 
     Optional<Appointment> getLastAppointment(Long chatId);
 }
