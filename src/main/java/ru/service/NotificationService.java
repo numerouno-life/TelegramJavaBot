@@ -16,5 +16,9 @@ public interface NotificationService {
 
     void sendMainMenu(Long chatId, String text);
 
+    void sendAdminMenu(Long chatId, String text);
+
+    void getUserManagementMenu(Long chatId, String text);
+
     Message sendMessageAndReturn(Long chatId, String text, InlineKeyboardMarkup replyMarkup);
 }

@@ -24,9 +24,6 @@ public class AppointmentNotificationScheduler {
     public void scheduleNotifications(Appointment appointment) {
         LocalDateTime appointmentTime = appointment.getDateTime();
 
-        scheduleTask(appointment, LocalDateTime.now().plusSeconds(30),
-                "⏰  Тестовое Напоминаем через 30 сек!" + "(◕‿◕) \n♡♡♡♡♡♡♡♡♡♡");
-
         // Напоминание за день
         scheduleTask(appointment, appointmentTime.minusDays(1),
                 "📅 Напоминаем: завтра у вас запись на %s!");
@@ -50,6 +47,10 @@ public class AppointmentNotificationScheduler {
                 String message = template.formatted(
                         appointment.getDateTime().format(DateTimeFormatter.ofPattern("dd.MM.yyyy 'в' HH:mm"))
                 );
+                if (appointment.getUser().getTelegramId() == null) {
+                    log.warn("Пользователь {} не имеет Telegram ID", appointment.getUser().getUsername());
+                    return; // Пропускаем отправку, если Telegram ID отсутствует
+                }
                 notificationService.sendMessage(
                         appointment.getUser().getTelegramId(),
                         message

@@ -1,9 +1,11 @@
 package ru.util;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
+import ru.model.enums.UserRole;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,6 +18,7 @@ import java.util.Locale;
 import static ru.util.BotConstants.*;
 
 @Component
+@Slf4j
 public class KeyboardFactory {
 
     public InlineKeyboardMarkup mainMenu() {
@@ -47,6 +50,13 @@ public class KeyboardFactory {
         ));
     }
 
+    public InlineKeyboardButton backToAdminMenu() {
+        return InlineKeyboardButton.builder()
+                .text("⬅️ В админ-меню")
+                .callbackData("admin_back")
+                .build();
+    }
+
     // Пагинация для истории записей
     public InlineKeyboardMarkup historyPagination(int currentPage, int totalPages, String baseCallback) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
@@ -70,7 +80,7 @@ public class KeyboardFactory {
     }
 
     // Кнопки отмены записи
-    public InlineKeyboardMarkup cancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
+    public InlineKeyboardMarkup userCancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         InlineKeyboardRow row = new InlineKeyboardRow();
         row.add(createButton("❌ Отменить", "cancel_" + appointmentId));
@@ -80,7 +90,8 @@ public class KeyboardFactory {
     }
 
     // Клавиатура выбора времени
-    public InlineKeyboardMarkup timeSelectionKeyboard(LocalDate date, List<LocalDateTime> availableSlots) {
+    public InlineKeyboardMarkup timeSelectionKeyboard(LocalDate date, List<LocalDateTime> availableSlots,
+                                                      UserRole userRole) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         InlineKeyboardRow currentRow = new InlineKeyboardRow();
 
@@ -103,13 +114,61 @@ public class KeyboardFactory {
         }
 
         // Кнопка "Назад" к датам
-        rows.add(backButton("⬅️ Назад", "back_to_dates").getKeyboard().get(0));
+        if (userRole == UserRole.USER) {
+            rows.add(backButton("⬅️ Назад", "back_to_dates").getKeyboard().get(0));
+        }
+        if (userRole == UserRole.ADMIN) {
+            rows.add(backButton("⬅️ Назад", "admin_back").getKeyboard().get(0));
+        }
 
         return new InlineKeyboardMarkup(rows);
     }
 
+    /**
+     * Генерирует клавиатуру с временными слотами, используя префикс для callback'ов
+     * (например, admin_time_ или user_time_)
+     */
+    public InlineKeyboardMarkup timeSelectionKeyboard(List<LocalDateTime> slots, String prefix) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        InlineKeyboardRow currentRow = new InlineKeyboardRow();
+
+        for (LocalDateTime slot : slots) {
+            // Форматируем время: 12:00
+            String timeText = slot.toLocalTime().format(TIME_FORMAT);
+            InlineKeyboardButton button = createButton("🟢 " + timeText, prefix + slot);
+            currentRow.add(button);
+
+            if (currentRow.size() == 3) {
+                rows.add(currentRow);
+                currentRow = new InlineKeyboardRow();
+            }
+        }
+
+        if (!currentRow.isEmpty()) {
+            rows.add(currentRow);
+        }
+
+        // Добавляем кнопку "назад" — переходит в админ-меню
+        InlineKeyboardRow backRow = backButton("⬅️ Отмена", "admin_back").getKeyboard().get(0);
+        rows.add(backRow);
+
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public InlineKeyboardMarkup dateSelectionKeyboard(List<LocalDate> availableDates, String prefix) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru"));
+
+        for (LocalDate date : availableDates) {
+            rows.add(row(date.format(dateFormat), prefix + date));
+        }
+
+        rows.add(backButton("⬅️ Отмена", "admin_back").getKeyboard().get(0));
+        return new InlineKeyboardMarkup(rows);
+    }
+
     // Клавиатура выбора даты
-    public InlineKeyboardMarkup dateSelectionKeyboard(List<LocalDate> availableDates) {
+    public InlineKeyboardMarkup dateSelectionKeyboard(List<LocalDate> availableDates, UserRole userRole) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru"));
 
@@ -118,7 +177,12 @@ public class KeyboardFactory {
         }
 
         // Кнопка "Назад" к меню
-        rows.add(backButton("⬅️ Назад", "back_to_menu").getKeyboard().get(0));
+        if (userRole == UserRole.USER) {
+            rows.add(backButton("⬅️ Назад в меню", "back_to_menu").getKeyboard().get(0));
+        }
+        if (userRole == UserRole.ADMIN) {
+            rows.add(backButton("⬅️ Назад в меню записей", "admin:menu:appointments").getKeyboard().get(0));
+        }
 
         return new InlineKeyboardMarkup(rows);
     }

@@ -4,20 +4,33 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import ru.error.exception.AppointmentNotFoundException;
 import ru.model.Appointment;
+import ru.model.User;
+import ru.model.enums.AdminAppointmentState;
 import ru.model.enums.StatusAppointment;
+import ru.model.enums.UserAppointmentState;
+import ru.model.enums.UserRole;
 import ru.repository.AppointmentRepository;
+import ru.repository.UserRepository;
 import ru.scheduler.AppointmentNotificationScheduler;
 import ru.service.AppointmentService;
+import ru.service.NotificationService;
 import ru.service.UserSessionService;
 import ru.service.WorkScheduleService;
+import ru.util.KeyboardFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+
+import static ru.util.BotConstants.DATE_FORMAT;
+import static ru.util.BotConstants.TIME_FORMAT;
 
 @Slf4j
 @Service
@@ -27,22 +40,25 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final AppointmentNotificationScheduler notificationScheduler;
     private final WorkScheduleService workScheduleService;
     private final UserSessionService userSessionService;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
+    private final KeyboardFactory keyboardFactory;
 
     @Override
-    public void setUserState(Long chatId, String status) {
+    public void setUserState(Long chatId, UserAppointmentState state) {
         if (chatId == null) {
             log.warn("Попытка установить состояние для chatId = null");
             return;
         }
-        if (status == null) {
+        if (state == null) {
             clearUserState(chatId);
             return;
         }
-        userSessionService.setUserState(chatId, status);
+        userSessionService.setUserState(chatId, state);
     }
 
     @Override
-    public String getUserState(Long chatId) {
+    public UserAppointmentState getUserState(Long chatId) {
         return userSessionService.getUserState(chatId);
     }
 
@@ -52,12 +68,22 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     // Сохранить запись
-    @Transactional
     @Override
+    @Transactional
     public Appointment createAppointment(Appointment appointment) {
+        log.info("Создание записи: user.id={}, username={}",
+                appointment.getUser().getId(),
+                appointment.getUser().getUsername());
+        if (!isTimeSlotAvailable(appointment.getDateTime())) {
+            throw new IllegalStateException("Слот уже занят");
+        }
+        appointment.setStatus(StatusAppointment.ACTIVE);
         Appointment saved = appointmentRepository.save(appointment);
-        saved.setStatus(StatusAppointment.CONFIRMED);
-        notificationScheduler.scheduleNotifications(saved);
+        if (saved.getUser().getRole() == UserRole.USER) {
+            notificationScheduler.scheduleNotifications(saved);
+            notifyAdminsNewAppointment(saved);
+        }
+
         log.info("Запись создана: {}", saved);
         return saved;
     }
@@ -109,7 +135,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     public boolean isTimeSlotAvailable(LocalDateTime dateTime) {
         return appointmentRepository.findByDateTime(dateTime)
                 .stream()
-                .noneMatch(a -> a.getStatus() != StatusAppointment.CANCELED);
+                .noneMatch(a -> a.getStatus() == StatusAppointment.ACTIVE);
     }
 
     // Получить доступные слоты на день (по часам: 10:00, 11:00, ..., 20:00)
@@ -132,7 +158,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalDateTime end = localDate.atTime(endTime);
         List<LocalDateTime> availableSlots = new ArrayList<>();
 
-        while (current.isBefore(end)) {
+        while (!current.isAfter(end)) {
             if (current.isAfter(LocalDateTime.now()) && isTimeSlotAvailable(current)) {
                 availableSlots.add(current);
             }
@@ -149,6 +175,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     // Временное сохранение даты
     @Override
     public void setPendingDate(Long chatId, LocalDateTime dateTime) {
+        log.info("💾 Сохраняем pendingDate: {} → {}", chatId, dateTime);
         userSessionService.setPendingDate(chatId, dateTime);
     }
 
@@ -222,4 +249,116 @@ public class AppointmentServiceImpl implements AppointmentService {
     public void clearHistoryPage(Long chatId) {
         userSessionService.clearHistoryPage(chatId);
     }
+
+    @Override
+    public String getPendingName(Long chatId) {
+        if (chatId == null) {
+            log.warn("Попытка получить имя для chatId = null");
+            return null;
+        } else {
+            return userSessionService.getPendingName(chatId);
+        }
+    }
+
+    @Override
+    public void setAdminState(Long chatId, AdminAppointmentState state) {
+        userSessionService.setAdminState(chatId, state);
+    }
+
+    @Override
+    public AdminAppointmentState getAdminState(Long chatId) {
+        return userSessionService.getAdminState(chatId);
+    }
+
+    @Override
+    public void clearAdminState(Long chatId) {
+        userSessionService.clearAdminState(chatId);
+    }
+
+    @Override
+    public void clearPendingDate(Long chatId) {
+        userSessionService.clearPendingDate(chatId);
+    }
+
+    private void notifyAdminsNewAppointment(Appointment appointment) {
+        List<User> admins = userRepository.findAllByRole(UserRole.ADMIN);
+
+        String msg = String.format(
+                """
+                        📢 Новая запись!
+                        
+                        👤 Клиент: %s %s (@%s)
+                        📞 Телефон: %s
+                        📅 Дата и время: %s""",
+                appointment.getUser().getFirstName() == null ? "" : appointment.getUser().getFirstName(),
+                appointment.getUser().getLastName() == null ? "" : appointment.getUser().getLastName(),
+                appointment.getUser().getUsername() == null ? "Нет NickName" : appointment.getUser().getUsername(),
+                appointment.getUser().getClientPhoneNumber(),
+                appointment.getDateTime().format(DATE_FORMAT) + "-" + appointment.getDateTime().format(TIME_FORMAT)
+        );
+
+        for (User admin : admins) {
+            if (admin.getTelegramId() != null && !admin.getIsBlocked()) {
+                notificationService.sendMessage(admin.getTelegramId(), msg);
+            }
+        }
+    }
+
+    public void cancellationNoticeForAdmins(Appointment appointment) {
+        List<User> admins = userRepository.findAllByRole(UserRole.ADMIN);
+
+        String msg = String.format(
+                """
+                        📢 Отмена записи!
+                        
+                        👤 Клиент: %s %s (@%s)
+                        📞 Телефон: %s
+                        📅 Дата и время: %s""",
+                appointment.getUser().getFirstName(),
+                appointment.getUser().getLastName() == null ? "" : appointment.getUser().getLastName(),
+                appointment.getUser().getUsername() == null ? "Нет NickName" : appointment.getUser().getUsername(),
+                appointment.getUser().getClientPhoneNumber(),
+                appointment.getDateTime().format(DATE_FORMAT) + "-" + appointment.getDateTime().format(TIME_FORMAT)
+        );
+        InlineKeyboardMarkup backButton = keyboardFactory.backButton("⬅️ Назад", "back_to_menu");
+
+        for (User admin : admins) {
+            if (admin.getTelegramId() != null && !admin.getIsBlocked()) {
+                notificationService.sendOrEditMessage(admin.getTelegramId(), null, msg, backButton);
+            }
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasAppointmentInLast6Days(Long chatId, LocalDateTime newDateTime) {
+        LocalDateTime sevenDaysAgo = newDateTime.minusDays(6);
+        return appointmentRepository.findByUserTelegramId(chatId).stream()
+                .anyMatch(app -> app.getStatus() == StatusAppointment.ACTIVE &&
+                        !app.getDateTime().isBefore(sevenDaysAgo) &&
+                        !app.getDateTime().isAfter(newDateTime));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Appointment getLastAppointmentWithin6Days(Long chatId, LocalDateTime newDateTime) {
+        LocalDateTime sixDaysAgo = newDateTime.minusDays(6);
+        return appointmentRepository.findByUserTelegramId(chatId).stream()
+                .filter(app -> app.getStatus() == StatusAppointment.ACTIVE ||
+                        app.getStatus() == StatusAppointment.CONFIRMED)
+                .filter(app -> app.getDateTime().isBefore(newDateTime)) // прошедшие или текущие
+                .filter(app -> !app.getDateTime().isBefore(sixDaysAgo)) // не старше 6 дней
+                .max(Comparator.comparing(Appointment::getDateTime))
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Appointment> getLastAppointment(Long chatId) {
+        return appointmentRepository
+                .findTopByUserTelegramIdAndStatusNotOrderByDateTimeDesc(
+                        chatId, StatusAppointment.CANCELED
+                );
+    }
+
 }

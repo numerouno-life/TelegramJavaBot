@@ -1,0 +1,11 @@
+package ru.model.enums;
+
+public enum AdminAppointmentState {
+    ADM_AWAITING_DATE,
+    AWAITING_OVERRIDE_TIME,
+    AWAITING_OVERRIDE_DATE,
+    AWAITING_OVERRIDE_REASON,
+    ADM_AWAITING_NAME,
+    ADM_AWAITING_PHONE,
+    COMPLETED
+}

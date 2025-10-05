@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import ru.bot.handler.CallbackQueryHandler;
+import ru.bot.handler.callback.CallbackQueryHandler;
 import ru.bot.handler.TextMessageHandler;
 
 @Component

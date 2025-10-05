@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.model.WorkDaysOverride;
+import ru.model.WorkSchedule;
 import ru.model.enums.StatusAppointment;
 import ru.repository.AppointmentRepository;
 import ru.repository.WorkDaysOverrideRepository;
@@ -118,10 +119,6 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
                                    boolean isWorking, String reason) {
         var override = workDaysOverrideRepository.findByDate(date).orElse(null);
 
-        if (override == null && !isWorking && (start == null || end == null)) {
-            return; // не создаём запись для нерабочего дня без причины
-        }
-
         if (override == null) {
             override = WorkDaysOverride.builder()
                     .date(date)
@@ -137,5 +134,23 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
             override.setReason(reason);
         }
         workDaysOverrideRepository.save(override);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<WorkSchedule> getAllWorkSchedules() {
+        return workScheduleRepository.findAllByOrderByDayOfWeekAsc();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<WorkSchedule> getAllWorkSchedule() {
+        return workScheduleRepository.findAll();
+    }
+
+    @Override
+    @Transactional
+    public void deleteOverrideByDate(LocalDate date) {
+        workDaysOverrideRepository.deleteByDate(date);
     }
 }
