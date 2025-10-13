@@ -8,4 +8,4 @@ WORKDIR /app
 COPY target/javabot-*.jar app.jar
 
 # Оптимизированные параметры запуска
-ENTRYPOINT ["java", "-Xmx512m", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-Xmx256m", "-jar", "/app/app.jar"]

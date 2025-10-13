@@ -3,7 +3,7 @@ services:
     build: .
     container_name: barber-server
     ports:
-      - "8080:8080"
+      - "18080:8080"
     env_file:
       - .env
     environment:
@@ -15,9 +15,11 @@ services:
     depends_on:
       - barber-db
       - redis
-    restart: unless-stopped
+    restart: always
     networks:
       - app-network
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   barber-db:
     image: postgres:16.1
