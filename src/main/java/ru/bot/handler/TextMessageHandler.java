@@ -37,23 +37,24 @@ public class TextMessageHandler {
     private final UserSessionService userSessionService;
     private final WorkScheduleService workScheduleService;
     private final AdminKeyboard adminKeyboard;
-    private final AdminCallbackHandler adminCallbackHandler;
+    private final FloodProtectionService floodProtectionService;
 
     public void handleTextMessage(Update update) {
         Message message = update.getMessage();
         Long chatId = message.getChatId();
         String text = message.getText();
+        Long userId = message.getFrom().getId();
         String role = userSessionService.getRole(chatId);
+        if (floodProtectionService.isFloodDetected(userId, text)) {
+            log.warn("Флуд защита сработала для пользователя {} в текстовом сообщении", userId);
+            notificationService.sendMessage(chatId, "❌ Слишком много запросов. Попробуйте позже.");
+            return;
+        }
+
         if (userService.isBlocked(chatId)) {
             notificationService.sendMessage(chatId, "❌ Ваш аккаунт заблокирован. Обратитесь к администратору.");
             return;
         }
-        User from = userService.getOrCreateUser(
-                chatId,
-                message.getFrom().getUserName(),
-                message.getFrom().getFirstName(),
-                message.getFrom().getLastName()
-        );
 
         if (CMD_ADMIN.equalsIgnoreCase(text) || CMD_ADMIN_MENU.equalsIgnoreCase(text)) {
             if (userService.isAdmin(chatId)) {
