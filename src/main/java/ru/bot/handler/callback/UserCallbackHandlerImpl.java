@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import static ru.service.impl.FloodProtectionServiceImpl.APPOINTMENT_START_WINDOW_MINUTES;
 import static ru.util.BotConstants.*;
 
 @Component
@@ -33,6 +34,7 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
     private final UserService userService;
     private final AdminService adminService;
     private final UserSessionService userSessionService;
+    private final FloodProtectionService floodProtectionService;
 
     public static final int PAGE_SIZE_FIVE = 5;
 
@@ -41,6 +43,7 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
         Integer messageId = callbackQuery.getMessage().getMessageId();
+        Long userId = callbackQuery.getFrom().getId();
         if (userService.isBlocked(chatId)) {
             notificationService.sendMessage(chatId, "❌ Ваш аккаунт заблокирован. Обратитесь к администратору.");
             return;
@@ -54,7 +57,7 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
                 case DATE -> handleDateSelection(chatId, messageId, data);
                 case TIME -> handleTimeSelection(chatId, messageId, data);
                 case BACK_TO_MENU -> handleBackToMenu(chatId);
-                case BOOK_APPOINTMENT -> handleBookAppointment(chatId, messageId);
+                case BOOK_APPOINTMENT -> handleBookAppointment(chatId, messageId, userId);
                 case MY_APPOINTMENTS -> handleMyAppointments(chatId);
                 case CONTACTS -> handleContacts(chatId);
                 case CANCEL -> handleCancelAppointment(chatId, messageId, data);
@@ -242,7 +245,13 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
         notificationService.sendMainMenu(chatId, text);
     }
 
-    private void handleBookAppointment(Long chatId, Integer messageId) {
+    private void handleBookAppointment(Long chatId, Integer messageId, Long userId) {
+        if (!floodProtectionService.canStartAppointmentProcess(userId)) {
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "⚠️ Слишком много попыток начать запись. Подождите " +
+                            APPOINTMENT_START_WINDOW_MINUTES + " минут и попробуйте снова.", null);
+            return;
+        }
         textMessageHandler.startAppointmentProcess(chatId, messageId);
     }
 

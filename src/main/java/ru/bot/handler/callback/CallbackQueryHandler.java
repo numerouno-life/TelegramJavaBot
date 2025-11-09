@@ -8,6 +8,7 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import ru.bot.handler.AdminCallbackHandler;
 import ru.bot.handler.UserCallBackHandler;
 import ru.model.enums.CallbackType;
+import ru.service.FloodProtectionService;
 import ru.service.NotificationService;
 import ru.service.UserService;
 
@@ -22,18 +23,25 @@ public class CallbackQueryHandler {
     private final AdminCallbackHandler adminCallbackHandler;
     private final UserService userService;
     private final UserCallBackHandler userCallbackHandler;
+    private final FloodProtectionService floodProtectionService;
 
     public void handleCallbackQuery(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
         Integer messageId = callbackQuery.getMessage().getMessageId();
+        Long userId = callbackQuery.getFrom().getId();
+
+        if (floodProtectionService.isFloodDetected(userId, data)) {
+            log.warn("Флуд защита сработала для пользователя {} в коллбэке", userId);
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "❌ Вы слишком часто отправляете запросы. Пожалуйста, подождите.", null);
+            return;
+        }
 
         log.debug("Processing callback: data='{}', type={}", data, CallbackType.fromString(data));
         try {
             CallbackType type = CallbackType.fromString(data);
-            Long userId = callbackQuery.getFrom().getId();
             boolean isAdmin = userService.isAdmin(userId);
-            boolean isBlocked = userService.isBlocked(userId);
 
             if (isAdmin && isAdministrativeCallback(type)) {
                 adminCallbackHandler.handleAdminCallback(callbackQuery);
@@ -42,7 +50,7 @@ public class CallbackQueryHandler {
 
             userCallbackHandler.handleUserCallback(callbackQuery);
         } catch (Exception e) {
-            log.error("Error handling callback query: {}", data, e);
+            log.error("Ошибка обработки обратного запроса: {}", data, e);
             notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Произошла ошибка. Попробуйте снова.", null);
         }
