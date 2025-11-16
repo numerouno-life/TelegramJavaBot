@@ -15,6 +15,7 @@ public class BotConstants {
     public static final String ICON_STATS = "📊";
     public static final String ICON_SETTINGS = "⚙️";
     public static final String ICON_CALENDAR = "🗓";
+    public static final String ICON_LUNCH = "🍽 ";
 
     // Команды пользователя
     public static final String CMD_START = "/start";
@@ -45,6 +46,7 @@ public class BotConstants {
     public static final String CMD_ADMIN_DELETE_OVERRIDE = ICON_HISTORY + " Удалить исключение";
     public static final String CMD_ADMIN_BACK_TO_OVERRIDES = ICON_BACK + " Назад к списку исключений";
     public static final String CMD_ADMIN_MANAGEMENT = ICON_SETTINGS + " Меню назначения админов";
+    public static final String CMD_ADMIN_LUNCH_MENU = ICON_LUNCH + "Обеденные перерывы";
 
     // Форматы
     public static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
