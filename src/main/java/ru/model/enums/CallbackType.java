@@ -41,7 +41,10 @@ public enum CallbackType {
     ADMIN_ADD_NEW_ADMIN("admin:add:new_admin"),
     ADMIN_SET_NEW_ADMIN("admin:set:new_admin_"),
     ADMIN_DELETE_ADMIN("admin:delete:admin_"),
-    ADMIN_ADMINS_PAGE("admin_admins_page_");
+    ADMIN_ADMINS_PAGE("admin_admins_page_"),
+    ADMIN_LUNCH_MENU("admin:lunch:menu"),
+    ADMIN_EDIT_LUNCH("admin:edit:lunch_"),
+    ADMIN_SAVE_LUNCH("admin:save:lunch_");
 
 
     private final String prefix;

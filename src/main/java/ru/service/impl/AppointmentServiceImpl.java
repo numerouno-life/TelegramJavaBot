@@ -15,10 +15,7 @@ import ru.model.enums.UserRole;
 import ru.repository.AppointmentRepository;
 import ru.repository.UserRepository;
 import ru.scheduler.AppointmentNotificationScheduler;
-import ru.service.AppointmentService;
-import ru.service.NotificationService;
-import ru.service.UserSessionService;
-import ru.service.WorkScheduleService;
+import ru.service.*;
 import ru.util.KeyboardFactory;
 
 import java.time.LocalDate;
@@ -43,6 +40,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final KeyboardFactory keyboardFactory;
+    private final LunchBreakService lunchBreakService;
 
     @Override
     public void setUserState(Long chatId, UserAppointmentState state) {
@@ -159,6 +157,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         List<LocalDateTime> availableSlots = new ArrayList<>();
 
         while (!current.isAfter(end)) {
+            // Пропускаем слоты, которые попадают на обеденное время
+            if (lunchBreakService.isLunchTime(current)){
+                current = current.plusHours(1);
+                continue;
+            }
+
             if (current.isAfter(LocalDateTime.now()) && isTimeSlotAvailable(current)) {
                 availableSlots.add(current);
             }

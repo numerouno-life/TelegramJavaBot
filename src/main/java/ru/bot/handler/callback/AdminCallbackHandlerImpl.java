@@ -8,10 +8,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import ru.bot.handler.AdminCallbackHandler;
-import ru.model.Appointment;
-import ru.model.User;
-import ru.model.WorkDaysOverride;
-import ru.model.WorkSchedule;
+import ru.model.*;
 import ru.model.enums.*;
 import ru.repository.WorkDaysOverrideRepository;
 import ru.repository.WorkScheduleRepository;
@@ -25,6 +22,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static ru.util.BotConstants.DATE_FORMAT;
@@ -44,6 +42,7 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
     private final WorkScheduleRepository workScheduleRepository;
     private final WorkDaysOverrideRepository workDaysOverrideRepository;
     private final KeyboardFactory keyboardFactory;
+    private final LunchBreakService lunchBreakService;
 
     public static final int PAGE_SIZE_FIVE = 5;
 
@@ -135,6 +134,23 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
                     showAllActiveAppointments(chatId, messageId, page);
                 }
                 case ADMIN_ADD_NEW_ADMIN -> setNewAdmin(chatId, messageId, 0);
+                case ADMIN_LUNCH_MENU -> showLunchBreakMenu(chatId, messageId);
+                case ADMIN_EDIT_LUNCH -> {
+                    String dayStr = data.substring("admin:edit:lunch_".length());
+                    int dayOfWeek = Integer.parseInt(dayStr);
+                    showEditLunchForm(chatId, messageId, dayOfWeek);
+                }
+                case ADMIN_SAVE_LUNCH -> {
+                    String prefix = "admin:save:lunch_";
+                    String payload = data.substring(prefix.length());
+                    String[] parts = payload.split("_");
+
+                    int dayOfWeek = Integer.parseInt(parts[0]);
+                    LocalTime startTime = parts[1].equals("null") ? null : LocalTime.parse(parts[1]);
+                    LocalTime endTime = parts[2].equals("null") ? null : LocalTime.parse(parts[2]);
+                    boolean isActive = Boolean.parseBoolean(parts[3]);
+                    saveLunchBreak(chatId, messageId, dayOfWeek, startTime, endTime, isActive);
+                }
                 case UNKNOWN -> log.warn("Unknown admin callback: {}", data);
                 default -> log.debug("Callback not handled by admin: {}", data);
             }
@@ -144,6 +160,80 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
             notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Ошибка при обработке запроса. Попробуйте снова.", null);
         }
+    }
+
+    private void saveLunchBreak(Long chatId, Integer messageId, int dayOfWeek,
+                                LocalTime startTime, LocalTime endTime, boolean isActive) {
+        log.info("Сохранение обеда для дня недели {}", dayOfWeek);
+        try {
+            lunchBreakService.updateLunchBreak(dayOfWeek, startTime, endTime, isActive);
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "✅ Обед обновлен!", null);
+            showLunchBreakMenu(chatId, messageId); // Возвращаемся в меню выбора дня
+        } catch (Exception e) {
+            log.error("Ошибка при сохранении обеда: {}", e.getMessage(), e);
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "❌ Ошибка при сохранении", null);
+        }
+    }
+
+    private void showEditLunchForm(Long chatId, Integer messageId, int dayOfWeek) {
+        log.info("Показ формы редактирования обеда для дня недели {}", dayOfWeek);
+        LunchBreak lunchBreak = lunchBreakService.getLunchBreakByDayOfWeek(dayOfWeek);
+
+        if (lunchBreak == null) {
+            log.warn("Обед для дня недели {} не найден", dayOfWeek);
+            notificationService.sendOrEditMessage(chatId, messageId, "День не найден.", null);
+        }
+        String dayName = getDayName(dayOfWeek);
+        String text = "🍽️ Редактирование обеда: " + dayName + "\n" +
+                "Текущее время: " + (Objects.requireNonNull(lunchBreak).getIsActive()
+                ? lunchBreak.getStartTime() + " - " + lunchBreak.getEndTime()
+                : "обед отключен") + "\n\n" +
+                "Выберите новое время обеда:";
+        notificationService.sendOrEditMessage(chatId, messageId, text, adminKeyboard.getEditLunchKeyboard(dayOfWeek));
+        log.info("Форма редактирования обеда для дня недели {} показана", dayOfWeek);
+    }
+
+    // Показываем просмотр расписания обедов (только для просмотра)
+    private void showLunchBreakView(Long chatId, Integer messageId) {
+        List<LunchBreak> lunchBreaks = lunchBreakService.getAllLunchBreaks();
+        StringBuilder sb = new StringBuilder("🍽️ *Расписание обеденных перерывов*\n\n");
+
+        for (LunchBreak lunch : lunchBreaks) {
+            String dayName = getDayName(lunch.getDayOfWeek());
+            if (lunch.getIsActive()) {
+                sb.append("✅ ").append(dayName)
+                        .append(": ").append(lunch.getStartTime()).append(" - ").append(lunch.getEndTime())
+                        .append("\n");
+            } else {
+                sb.append("❌ ").append(dayName).append(" — без обеда\n");
+            }
+        }
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(adminKeyboard.backToScheduleMenu()));
+        notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
+    }
+
+    // Показываем меню выбора дня
+    private void showLunchBreakMenu(Long chatId, Integer messageId) {
+        List<LunchBreak> lunchBreaks = lunchBreakService.getAllLunchBreaks();
+        InlineKeyboardMarkup markup = adminKeyboard.getLunchBreakMenu(lunchBreaks);
+        StringBuilder sb = new StringBuilder("🍽️ *Редактирование обеденных перерывов*\n\n");
+
+        for (LunchBreak lunch : lunchBreaks) {
+            String dayName = getDayName(lunch.getDayOfWeek());
+            if (lunch.getIsActive()) {
+                sb.append("✅ ").append(dayName)
+                        .append(": ").append(lunch.getStartTime()).append(" - ").append(lunch.getEndTime())
+                        .append("\n");
+            } else {
+                sb.append("❌ ").append(dayName).append(" — без обеда\n");
+            }
+        }
+
+        sb.append("\nВыберите день для редактирования:");
+        notificationService.sendOrEditMessage(chatId, messageId, sb.toString(), markup);
     }
 
     private void removeAdmin(Long chatId, Integer messageId, Long userId) {

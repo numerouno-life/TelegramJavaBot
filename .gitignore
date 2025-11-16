@@ -40,3 +40,7 @@ build/
 .env
 *.env
 .idea/
+
+echo ".gigaide/" >> .gitignore
+echo ".tool-versions" >> .gitignore
+echo "dump.rdb" >> .gitignore

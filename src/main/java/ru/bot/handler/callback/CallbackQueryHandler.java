@@ -82,6 +82,9 @@ public class CallbackQueryHandler {
                  ADMIN_ADD_NEW_ADMIN,
                  ADMIN_SET_NEW_ADMIN,
                  ADMIN_DELETE_ADMIN,
+                 ADMIN_LUNCH_MENU,
+                 ADMIN_EDIT_LUNCH,
+                 ADMIN_SAVE_LUNCH,
                  ADMIN_BACK -> true;
             default -> false;
         };

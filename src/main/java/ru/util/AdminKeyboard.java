@@ -5,10 +5,7 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
-import ru.model.Appointment;
-import ru.model.User;
-import ru.model.WorkDaysOverride;
-import ru.model.WorkSchedule;
+import ru.model.*;
 import ru.model.enums.UserRole;
 
 import java.time.LocalDateTime;
@@ -57,6 +54,7 @@ public class AdminKeyboard {
                 keyboardFactory.row(CMD_ADMIN_SCHEDULE_MENU, "admin:schedule:menu"),
                 keyboardFactory.row(CMD_ADMIN_EDIT_WORK_SCHEDULE, "admin:edit:schedule"),
                 keyboardFactory.row(CMD_ADMIN_ALL_OVERRIDES, "admin:overrides"),
+                keyboardFactory.row(CMD_ADMIN_LUNCH_MENU, "admin:lunch:menu"),
                 keyboardFactory.row(CMD_ADMIN_BACK, "admin_back")
         ));
     }
@@ -226,6 +224,20 @@ public class AdminKeyboard {
         return new InlineKeyboardMarkup(rows);
     }
 
+    public InlineKeyboardMarkup getLunchBreakMenu(List<LunchBreak> lunchBreaks) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+
+        for (LunchBreak l : lunchBreaks) {
+            String dayName = getShortDayName(l.getDayOfWeek());
+            String text = (l.getIsActive() ? "✅ " : "❌ ") + dayName;
+            InlineKeyboardButton button = keyboardFactory.createButton(text, "admin:edit:lunch_" + l.getDayOfWeek());
+            rows.add(new InlineKeyboardRow(List.of(button)));
+        }
+
+        rows.add(backToScheduleMenu());
+        return new InlineKeyboardMarkup(rows);
+    }
+
     public InlineKeyboardMarkup getEditDayKeyboard(int dayOfWeek, WorkSchedule schedule) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         // Варианты времени
@@ -248,6 +260,30 @@ public class AdminKeyboard {
         // Назад в меню расписания
         rows.add(backToScheduleMenu());
 
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public InlineKeyboardMarkup getEditLunchKeyboard(int dayOfWeek) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        // Варианты времени
+        String[][] timeOptions = {
+                {"11:00", "12:00"},
+                {"12:00", "13:00"},
+                {"13:00", "14:00"},
+                {"14:00", "15:00"},
+                {"15:00", "16:00"}
+        };
+        for (String[] option : timeOptions) {
+            String text = option[0] + " - " + option[1];
+            String callback = "admin:save:lunch_" + dayOfWeek + "_" + option[0] + "_" + option[1] + "_true";
+            rows.add(new InlineKeyboardRow(List.of(keyboardFactory.createButton(text, callback))));
+        }
+        // Кнопка "Без обеда"
+        String callback = "admin:save:lunch_" + dayOfWeek + "_null_null_false";
+        rows.add(new InlineKeyboardRow(List.of(keyboardFactory.createButton("❌ Без обеда", callback))));
+
+        // Назад в меню расписания
+        rows.add(backToScheduleMenu());
         return new InlineKeyboardMarkup(rows);
     }
 
