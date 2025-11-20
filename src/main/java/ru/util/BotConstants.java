@@ -54,5 +54,6 @@ public class BotConstants {
 
     // Redis-префикс
     public static final String PREFIX = "session:";
+    public static final String PREFIX_PAYMENT = "payment:";
 
 }
