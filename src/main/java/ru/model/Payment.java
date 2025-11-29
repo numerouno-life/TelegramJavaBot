@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import ru.model.enums.ServiceType;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @ToString
@@ -32,8 +33,8 @@ public class Payment {
     @Column(name = "client_name")
     String clientName;
 
-    @Column(name = "amount", nullable = false)
-    Double amount;
+    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
+    BigDecimal amount;
 
     @Enumerated(EnumType.STRING)
     ServiceType serviceType;
@@ -45,7 +46,7 @@ public class Payment {
     LocalDateTime paymentDate; // когда оплатили = когда создали запись
 
     @Column(name = "created_by", nullable = false)
-    Long createdBy;
+    Integer createdBy;
 
     @Column(name = "comment")
     String comment;

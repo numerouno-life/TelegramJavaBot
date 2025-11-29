@@ -16,6 +16,11 @@ public class BotConstants {
     public static final String ICON_SETTINGS = "⚙️";
     public static final String ICON_CALENDAR = "🗓";
     public static final String ICON_LUNCH = "🍽 ";
+    public static final String ICON_MONEY = "💰";
+    public static final String ICON_DOLLAR = "💵";
+    public static final String ICON_CALENDARED = "📅";
+    public static final String ICON_TOMORROW_CALENDARED = "📆";
+    public static final String ICON_YESTERDAY_CALENDARED = "📖";
 
     // Команды пользователя
     public static final String CMD_START = "/start";
@@ -37,7 +42,7 @@ public class BotConstants {
     public static final String CMD_BLOCKED_USER = ICON_BLOCK + " Заблокировать";
     public static final String CMD_UNBLOCKED_USER = ICON_UNBLOCK + " Разблокировать";
     public static final String CMD_ADMIN_BACK = ICON_BACK + " Назад в Админку";
-    public static final String CMD_SHOW_STATS = ICON_STATS + " Статистика";
+    public static final String CMD_SHOW_STATS = ICON_STATS + " Статистика пользователей";
     public static final String CMD_ADMIN_EDIT_WORK_SCHEDULE = ICON_SETTINGS + " Редактировать расписание";
     public static final String CMD_ADMIN_SCHEDULE_MENU = ICON_CALENDAR + " Расписание работы";
     public static final String CMD_ADMIN_MANAGE_OVERRIDES = ICON_SETTINGS + " Меню исключений";
@@ -47,6 +52,16 @@ public class BotConstants {
     public static final String CMD_ADMIN_BACK_TO_OVERRIDES = ICON_BACK + " Назад к списку исключений";
     public static final String CMD_ADMIN_MANAGEMENT = ICON_SETTINGS + " Меню назначения админов";
     public static final String CMD_ADMIN_LUNCH_MENU = ICON_LUNCH + "Обеденные перерывы";
+    public static final String CMD_ADD_NEW_PAYMENT = ICON_DOLLAR + " Внести новый платеж";
+    public static final String CMD_ADMIN_PAYMENT_MENU = "💸 Меню платежей";
+    public static final String CMD_PAYMENT_STATS_MENU = ICON_MONEY + " Статистика платежей";
+    public static final String CMD_PAYMENT_TODAY = ICON_CALENDARED + " Сегодня";
+    public static final String CMD_PAYMENT_TOMORROW = ICON_TOMORROW_CALENDARED + " Завтра";
+    public static final String CMD_PAYMENT_YESTERDAY = ICON_YESTERDAY_CALENDARED + " Вчера";
+    public static final String CMD_PAYMENT_WEEK = ICON_STATS + " Неделя";
+    public static final String CMD_PAYMENT_MONTH = ICON_CALENDAR + " Месяц";
+    public static final String CMD_TOTAL_PAYMENT_STATS = ICON_MONEY + " Все время";
+    public static final String CMD_PAYMENT_CUSTOM_PERIOD = ICON_HISTORY + " Выбор периода";
 
     // Форматы
     public static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");

@@ -1,7 +1,10 @@
 package ru.model.enums;
 
+import lombok.Getter;
+
 import java.util.Arrays;
 
+@Getter
 public enum CallbackType {
     DATE("date_"),
     TIME("time_"),

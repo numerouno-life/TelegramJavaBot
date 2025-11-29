@@ -6,12 +6,18 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import ru.model.*;
+import ru.model.enums.CallbackPaymentType;
+import ru.model.enums.CallbackType;
+import ru.model.enums.ServiceType;
 import ru.model.enums.UserRole;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 import static ru.util.BotConstants.*;
 
@@ -27,7 +33,8 @@ public class AdminKeyboard {
                 keyboardFactory.row(CMD_ADMIN_SCHEDULE_MENU, "admin:menu:schedule"),
                 keyboardFactory.row(CMD_ALL_USERS, "admin_show_users"),
                 keyboardFactory.row(CMD_SHOW_STATS, "admin_stats"),
-                keyboardFactory.row(CMD_ADMIN_MANAGEMENT, "admin:add:new_admin")
+                keyboardFactory.row(CMD_ADMIN_MANAGEMENT, "admin:add:new_admin"),
+                keyboardFactory.row(CMD_ADMIN_PAYMENT_MENU, "payment:menu")
         ));
     }
 
@@ -41,11 +48,11 @@ public class AdminKeyboard {
 
     public InlineKeyboardMarkup getAppointmentsSubMenu() {
         return new InlineKeyboardMarkup(List.of(
-                keyboardFactory.row(CMD_ALL_APPOINTMENTS, "admin_appointments"),
-                keyboardFactory.row(CMD_ADMIN_APPOINTMENTS_TODAY, "all:today:app"),
-                keyboardFactory.row(CMD_ADMIN_APPOINTMENTS_TOMORROW, "all:tomorrow:app"),
-                keyboardFactory.row(CMD_CREATE_APPOINTMENT_ADMIN, "admin_create_appointment"),
-                keyboardFactory.row(CMD_ADMIN_BACK, "admin_back")
+                keyboardFactory.row(CMD_ALL_APPOINTMENTS, CallbackType.ADMIN_SHOW_APPOINTMENTS.getPrefix()),
+                keyboardFactory.row(CMD_ADMIN_APPOINTMENTS_TODAY, CallbackType.ADMIN_ALL_TODAY_APP.getPrefix()),
+                keyboardFactory.row(CMD_ADMIN_APPOINTMENTS_TOMORROW, CallbackType.ADMIN_ALL_TOMORROW_APP.getPrefix()),
+                keyboardFactory.row(CMD_CREATE_APPOINTMENT_ADMIN, CallbackType.ADMIN_CREATE_APPOINTMENT.getPrefix()),
+                keyboardFactory.row(CMD_ADMIN_BACK, CallbackType.ADMIN_BACK.getPrefix())
         ));
     }
 
@@ -57,6 +64,47 @@ public class AdminKeyboard {
                 keyboardFactory.row(CMD_ADMIN_LUNCH_MENU, "admin:lunch:menu"),
                 keyboardFactory.row(CMD_ADMIN_BACK, "admin_back")
         ));
+    }
+
+    public InlineKeyboardMarkup getPaymentMenu() {
+        InlineKeyboardRow row0 = new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton(CMD_ADD_NEW_PAYMENT,
+                        CallbackPaymentType.PAYMENT_CREATE_NEW.getPrefix())
+        ));
+        InlineKeyboardRow row1 = new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton(CMD_PAYMENT_STATS_MENU,
+                        CallbackPaymentType.PAYMENT_STATISTICS.getPrefix()))
+        );
+        InlineKeyboardRow row2 = new InlineKeyboardRow(List.of(
+                keyboardFactory.backToAdminMenu())
+        );
+        return new InlineKeyboardMarkup(List.of(row0, row1, row2));
+    }
+    public InlineKeyboardMarkup getStatisticsMenu() {
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton(CMD_PAYMENT_TODAY,
+                        CallbackPaymentType.PAYMENT_TODAY_STATS.getPrefix()),
+                keyboardFactory.createButton(CMD_PAYMENT_YESTERDAY,
+                        CallbackPaymentType.PAYMENT_YESTERDAY_STATS.getPrefix())
+        ));
+        InlineKeyboardRow row2 = new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton(CMD_PAYMENT_WEEK,
+                        CallbackPaymentType.PAYMENT_CURRENT_WEEK_STATS.getPrefix()),
+                keyboardFactory.createButton(CMD_PAYMENT_MONTH,
+                        CallbackPaymentType.PAYMENT_CURRENT_MONTH_STATS.getPrefix())
+        ));
+        InlineKeyboardRow row3 = new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton(CMD_TOTAL_PAYMENT_STATS,
+                        CallbackPaymentType.PAYMENT_TOTAL_STATS.getPrefix()),
+                keyboardFactory.createButton(CMD_PAYMENT_CUSTOM_PERIOD,
+                        CallbackPaymentType.PAYMENT_CUSTOM_PERIOD.getPrefix())
+        ));
+
+        InlineKeyboardRow rowBackToAdmMenu = new InlineKeyboardRow(List.of(
+                keyboardFactory.backToAdminMenu()
+        ));
+        return new InlineKeyboardMarkup(List.of(row1, row2, row3, rowBackToAdmMenu));
     }
 
     public InlineKeyboardMarkup getUsersListKeyboard(List<User> users, int page, int totalPages) {
@@ -287,7 +335,7 @@ public class AdminKeyboard {
         return new InlineKeyboardMarkup(rows);
     }
 
-    private String getShortDayName(int dayOfWeek) {
+    public String getShortDayName(int dayOfWeek) {
         return switch (dayOfWeek) {
             case 1 -> "Пн";
             case 2 -> "Вт";
@@ -333,5 +381,58 @@ public class AdminKeyboard {
             rows.add(new InlineKeyboardRow(List.of(cancelButton)));
         }
         return rows;
+    }
+
+    public InlineKeyboardMarkup getServiceTypesKeyboard() {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        for (ServiceType serviceType : ServiceType.values()) {
+            String callbackData = "payment:service:" + serviceType.name();
+            rows.add(new InlineKeyboardRow(List.of(
+                    keyboardFactory.createButton(serviceType.getDescription(), callbackData)
+            )));
+        }
+        rows.add(new InlineKeyboardRow(List.of(cancelPaymentButton())));
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public InlineKeyboardMarkup getConfirmPaymentKeyboard() {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        rows.add(new InlineKeyboardRow(List.of(
+                keyboardFactory.createButton("✅ Подтвердить платеж", CallbackPaymentType.PAYMENT_CONFIRM.getPrefix()),
+                cancelPaymentButton()
+        )));
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public InlineKeyboardMarkup getCancelPaymentKeyboard() {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        rows.add(new InlineKeyboardRow(List.of(cancelPaymentButton())));
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    private InlineKeyboardButton cancelPaymentButton() {
+        return keyboardFactory.createButton("❌ Отменить платеж", CallbackPaymentType.PAYMENT_CANCEL.getPrefix());
+    }
+
+    public InlineKeyboardMarkup dateSelectionKeyboardForStats(List<LocalDate> dates, String type) {
+        List<InlineKeyboardRow> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        for (LocalDate date : dates) {
+            String callbackData = "payment:select:" + type + ":date_" + date;
+            String buttonText = date.format(DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru")));
+            row.add(InlineKeyboardButton.builder()
+                    .text(buttonText)
+                    .callbackData(callbackData)
+                    .build());
+            if (row.size() == 2) {
+                keyboard.add(new InlineKeyboardRow(row));
+                row = new ArrayList<>();
+            }
+        }
+        if (!row.isEmpty()) {
+            keyboard.add(new InlineKeyboardRow(row));
+        }
+        keyboard.add(new InlineKeyboardRow(Arrays.asList(cancelPaymentButton())));
+        return InlineKeyboardMarkup.builder().keyboard(keyboard).build();
     }
 }

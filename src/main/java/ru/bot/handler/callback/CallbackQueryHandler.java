@@ -6,7 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import ru.bot.handler.AdminCallbackHandler;
+import ru.bot.handler.PaymentCallbackHandler;
 import ru.bot.handler.UserCallBackHandler;
+import ru.model.enums.CallbackPaymentType;
 import ru.model.enums.CallbackType;
 import ru.service.FloodProtectionService;
 import ru.service.NotificationService;
@@ -24,6 +26,7 @@ public class CallbackQueryHandler {
     private final UserService userService;
     private final UserCallBackHandler userCallbackHandler;
     private final FloodProtectionService floodProtectionService;
+    private final PaymentCallbackHandler paymentCallbackHandler;
 
     public void handleCallbackQuery(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
@@ -38,13 +41,20 @@ public class CallbackQueryHandler {
             return;
         }
 
-        log.debug("Processing callback: data='{}', type={}", data, CallbackType.fromString(data));
+        log.debug("Received callback data: '{}'", data);
         try {
-            CallbackType type = CallbackType.fromString(data);
             boolean isAdmin = userService.isAdmin(userId);
-
+            CallbackType type = CallbackType.fromString(data);
             if (isAdmin && isAdministrativeCallback(type)) {
+                log.debug("Detected ADMIN callback: {}", type);
                 adminCallbackHandler.handleAdminCallback(callbackQuery);
+                return;
+            }
+
+            if (isAdmin && data != null && data.startsWith("payment:")) {
+                CallbackPaymentType paymentType = CallbackPaymentType.fromString(data);
+                log.debug("Routing to PaymentHandler: {}", paymentType);
+                paymentCallbackHandler.handlePaymentCallback(callbackQuery);
                 return;
             }
 

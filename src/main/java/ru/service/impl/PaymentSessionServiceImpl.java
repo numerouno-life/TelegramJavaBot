@@ -8,9 +8,12 @@ import ru.model.enums.PaymentState;
 import ru.model.enums.ServiceType;
 import ru.service.PaymentSessionService;
 
+import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static ru.util.BotConstants.PREFIX_PAYMENT;
 
@@ -20,77 +23,56 @@ import static ru.util.BotConstants.PREFIX_PAYMENT;
 public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private static final Duration TTL = Duration.ofHours(24);
 
-    private static final Duration TTL = Duration.ofHours(24); // удалять через 24 часа
-
-    private String keyState(Long chatId) {
-        return PREFIX_PAYMENT + chatId + ":state";
+    private void setValue(Long chatId, String keySuffix, String value) {
+        if (chatId == null) return;
+        String key = PREFIX_PAYMENT + chatId + ":" + keySuffix;
+        if (value == null) {
+            redisTemplate.delete(key);
+        } else {
+            redisTemplate.opsForValue().set(key, value, TTL);
+        }
     }
 
-    private String keyAmount(Long chatId) {
-        return PREFIX_PAYMENT + chatId + ":amount";
-    }
-
-    private String keyServiceDate(Long chatId) {
-        return PREFIX_PAYMENT + chatId + ":serviceDate";
-    }
-
-    private String keyServiceType(Long chatId) {
-        return PREFIX_PAYMENT + chatId + ":serviceType";
-    }
-
-    private String keyPhone(Long chatId) {
-        return PREFIX_PAYMENT + chatId + ":phone";
-    }
-
-    private String keyName(Long chatId) {
-        return PREFIX_PAYMENT + chatId + ":name";
+    private String getValue(Long chatId, String keySuffix) {
+        if (chatId == null) return null;
+        String key = PREFIX_PAYMENT + chatId + ":" + keySuffix;
+        Object obj = redisTemplate.opsForValue().get(key);
+        return obj != null ? obj.toString() : null;
     }
 
     @Override
     public void setPaymentState(Long chatId, PaymentState state) {
-        if (chatId == null) return;
-        if (state == null) {
-            clearPaymentState(chatId);
-            return;
-        }
-        redisTemplate.opsForValue().set(keyState(chatId), state.name(), TTL);
+        setValue(chatId, "state", state != null ? state.name() : null);
     }
 
     @Override
     public PaymentState getPaymentState(Long chatId) {
-        if (chatId == null) return null;
-        Object state = redisTemplate.opsForValue().get(keyState(chatId));
-        if (state instanceof String str) {
+        String value = getValue(chatId, "state");
+        if (value != null) {
             try {
-                return PaymentState.valueOf(str);
+                return PaymentState.valueOf(value);
             } catch (IllegalArgumentException e) {
-                log.warn("Неизвестное PaymentState в Redis: {}", str);
+                log.warn("Неизвестное PaymentState в Redis: {}", value);
             }
         }
         return null;
     }
 
     @Override
-    public void setAmount(Long chatId, Double amount) {
-        if (chatId == null) return;
-        String value = amount != null ? amount.toString() : null;
-        if (value == null) {
-            redisTemplate.delete(keyAmount(chatId));
-        } else {
-            redisTemplate.opsForValue().set(keyAmount(chatId), value, TTL);
-        }
+    public void setAmount(Long chatId, BigDecimal amount) {
+        setValue(chatId, "amount", amount != null ? amount.toString() : null);
     }
 
     @Override
-    public Double getAmount(Long chatId) {
-        if (chatId == null) return null;
-        Object amount = redisTemplate.opsForValue().get(keyAmount(chatId));
-        if (amount instanceof String str) {
+    public BigDecimal getAmount(Long chatId) {
+        String value = getValue(chatId, "amount");
+        if (value != null) {
             try {
-                return Double.parseDouble(str);
+                return new BigDecimal(value);
             } catch (NumberFormatException e) {
-                log.warn("Некорректное значение суммы в Redis: {}", str);
+                log.warn("Некорректное значение суммы в Redis: {}", value);
             }
         }
         return null;
@@ -98,24 +80,17 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     public void setServiceDate(Long chatId, LocalDateTime date) {
-        if (chatId == null) return;
-        String value = date != null ? date.toString() : null;
-        if (value == null) {
-            redisTemplate.delete(keyServiceDate(chatId));
-        } else {
-            redisTemplate.opsForValue().set(keyServiceDate(chatId), value, TTL);
-        }
+        setValue(chatId, "serviceDate", date != null ? date.toString() : null);
     }
 
     @Override
     public LocalDateTime getServiceDate(Long chatId) {
-        if (chatId == null) return null;
-        Object date = redisTemplate.opsForValue().get(keyServiceDate(chatId));
-        if (date instanceof String str) {
+        String value = getValue(chatId, "serviceDate");
+        if (value != null) {
             try {
-                return LocalDateTime.parse(str);
+                return LocalDateTime.parse(value);
             } catch (IllegalArgumentException e) {
-                log.warn("Некорректная дата услуги в Redis: {}", str);
+                log.warn("Некорректная дата услуги в Redis: {}", value);
             }
         }
         return null;
@@ -123,23 +98,17 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     public void setServiceType(Long chatId, ServiceType type) {
-        if (chatId == null) return;
-        if (type == null) {
-            redisTemplate.delete(keyServiceType(chatId));
-        } else {
-            redisTemplate.opsForValue().set(keyServiceType(chatId), type.name(), TTL);
-        }
+        setValue(chatId, "serviceType", type != null ? type.name() : null);
     }
 
     @Override
     public ServiceType getServiceType(Long chatId) {
-        if (chatId == null) return null;
-        Object obj = redisTemplate.opsForValue().get(keyServiceType(chatId));
-        if (obj instanceof String str) {
+        String value = getValue(chatId, "serviceType");
+        if (value != null) {
             try {
-                return ServiceType.valueOf(str);
+                return ServiceType.valueOf(value);
             } catch (IllegalArgumentException e) {
-                log.warn("Неизвестный ServiceType в Redis: {}", str);
+                log.warn("Неизвестный ServiceType в Redis: {}", value);
             }
         }
         return null;
@@ -147,51 +116,70 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     public void setClientPhone(Long chatId, String phoneNumber) {
-        if (chatId == null) return;
-        if (phoneNumber == null) {
-            redisTemplate.delete(keyPhone(chatId));
-        } else {
-            redisTemplate.opsForValue().set(keyPhone(chatId), phoneNumber, TTL);
-        }
+        setValue(chatId, "phone", phoneNumber);
     }
 
     @Override
     public String getClientPhone(Long chatId) {
-        if (chatId == null) return null;
-        Object obj = redisTemplate.opsForValue().get(keyPhone(chatId));
-        return obj != null ? obj.toString() : null;
+        return getValue(chatId, "phone");
     }
 
     @Override
     public void setClientName(Long chatId, String name) {
-        if (chatId == null) return;
-        if (name == null) {
-            redisTemplate.delete(keyName(chatId));
-        } else {
-            redisTemplate.opsForValue().set(keyName(chatId), name, TTL);
-        }
+        setValue(chatId, "name", name);
     }
 
     @Override
     public String getClientName(Long chatId) {
-        if (chatId == null) return null;
-        Object obj = redisTemplate.opsForValue().get(keyName(chatId));
-        return obj != null ? obj.toString() : null;
+        return getValue(chatId, "name");
     }
 
-    // полная очистка
+    @Override
+    public void setStatsStartDate(Long chatId, LocalDate date) {
+        setValue(chatId, "statsStartDate", date != null ? date.toString() : null);
+    }
+
+    @Override
+    public LocalDate getStatsStartDate(Long chatId) {
+        String value = getValue(chatId, "statsStartDate");
+        if (value != null) {
+            try {
+                return LocalDate.parse(value);
+            } catch (IllegalArgumentException e) {
+                log.warn("Некорректная начальная дата выбора статистики в Redis: {}", value);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public void setStatsEndDate(Long chatId, LocalDate date) {
+        setValue(chatId, "statsEndDate", date != null ? date.toString() : null);
+    }
+
+    @Override
+    public LocalDate getStatsEndDate(Long chatId) {
+        String value = getValue(chatId, "statsEndDate");
+        if (value != null) {
+            try {
+                return LocalDate.parse(value);
+            } catch (IllegalArgumentException e) {
+                log.warn("Некорректная конечная дата выбора статистики в Redis: {}", value);
+            }
+        }
+        return null;
+    }
+
     @Override
     public void clearPaymentState(Long chatId) {
-        redisTemplate.delete(
-                List.of(
-                        keyState(chatId),
-                        keyAmount(chatId),
-                        keyServiceDate(chatId),
-                        keyServiceType(chatId),
-                        keyPhone(chatId),
-                        keyName(chatId)
+        if (chatId == null) return;
+        List<String> keys = Stream.of(
+                        "state", "amount", "serviceDate", "serviceType",
+                        "phone", "name", "statsStartDate", "statsEndDate"
                 )
-        );
-    }
+                .map(suffix -> PREFIX_PAYMENT + chatId + ":" + suffix)
+                .toList();
 
+        redisTemplate.delete(keys);
+    }
 }

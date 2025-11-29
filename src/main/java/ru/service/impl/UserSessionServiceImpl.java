@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import ru.model.enums.AdminAppointmentState;
+import ru.model.enums.PaymentState;
 import ru.model.enums.UserAppointmentState;
 import ru.service.UserSessionService;
 
@@ -142,6 +143,16 @@ public class UserSessionServiceImpl implements UserSessionService {
             return;
         }
         redisTemplate.opsForValue().set(keyAdminState(chatId), state.name(), TTL);
+    }
+
+    @Override
+    public void setAdminStateForPayment(Long chatId, PaymentState paymentState) {
+        if (chatId == null) return;
+        if (paymentState == null) {
+            clearAdminState(chatId);
+            return;
+        }
+        redisTemplate.opsForValue().set(keyAdminState(chatId), paymentState.name(), TTL);
     }
 
     @Override

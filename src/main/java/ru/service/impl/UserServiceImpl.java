@@ -98,11 +98,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Optional<User> findByPhoneNumber(String phoneNumber) {
-        return Optional.ofNullable(userRepository.findByClientPhoneNumber(phoneNumber).orElseThrow(
-                () -> {
-                    log.warn("Пользователь с телефоном {} не найден", phoneNumber);
-                    return new EntityNotFoundException("Пользователь с телефоном " + phoneNumber + " не найден");
-                }));
+        return userRepository.findByClientPhoneNumber(phoneNumber);
     }
 
     @Override
@@ -123,15 +119,16 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User createUserWithPhoneAndName(Long chatId, String phoneNumber, String firstName) {
-        if (findByPhoneNumber(phoneNumber).isEmpty()) {
-            User user = User.builder()
-                    .telegramId(chatId)
-                    .clientPhoneNumber(phoneNumber)
-                    .firstName(firstName)
-                    .build();
-            return userRepository.save(user);
-        }
-        return findByPhoneNumber(phoneNumber).get();
+        return findByPhoneNumber(phoneNumber).
+                orElseGet(() -> {
+                    User newUser = User.builder()
+                            .telegramId(chatId)
+                            .clientPhoneNumber(phoneNumber)
+                            .firstName(firstName)
+                            .build();
+                    return userRepository.save(newUser);
+                }
+        );
     }
 
     @Override

@@ -3,6 +3,8 @@ package ru.service;
 import ru.model.enums.PaymentState;
 import ru.model.enums.ServiceType;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public interface PaymentSessionService {
@@ -11,9 +13,9 @@ public interface PaymentSessionService {
 
     PaymentState getPaymentState(Long chatId);
 
-    void setAmount(Long chatId, Double amount);
+    void setAmount(Long chatId, BigDecimal amount);
 
-    Double getAmount(Long chatId);
+    BigDecimal getAmount(Long chatId);
 
     void setServiceDate(Long chatId, LocalDateTime date);
 
@@ -30,6 +32,14 @@ public interface PaymentSessionService {
     void setClientName(Long chatId, String name);
 
     String getClientName(Long chatId);
+
+    void setStatsStartDate(Long chatId, LocalDate date);
+
+    LocalDate getStatsStartDate(Long chatId);
+
+    void setStatsEndDate(Long chatId, LocalDate date);
+
+    LocalDate getStatsEndDate(Long chatId);
 
     void clearPaymentState(Long chatId);
 
