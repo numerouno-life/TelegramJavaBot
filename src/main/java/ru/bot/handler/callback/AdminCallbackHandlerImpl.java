@@ -54,9 +54,9 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
 
         log.debug("Processing admin callback: data='{}', type={}", data, CallbackType.fromString(data));
 
-
         if (!userService.isAdmin(adminId)) {
             notificationService.sendOrEditMessage(chatId, messageId, "❌ Доступ запрещён.", null);
+            return;
         }
 
         try {
@@ -261,7 +261,7 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
     private void setNewAdmin(Long chatId, Integer messageId, int page) {
         log.debug("Назначение нового админа: {}", chatId);
         if (!userService.isAdmin(chatId)) {
-            notificationService.sendOrEditMessage(chatId, messageId,"❌ Доступ запрещён.", null);
+            notificationService.sendOrEditMessage(chatId, messageId, "❌ Доступ запрещён.", null);
             log.warn("Пользователь с id {} не является админом", chatId);
             return;
         }
@@ -490,7 +490,7 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
         int totalAppointments = adminService.getAllAppointments().size();
         int totalActiveAppointments = adminService.getAllActiveAppointments().size();
 
-        String stats = "📊 Статистика:\n" +
+        String stats = "📊 Статистика пользователей:\n" +
                 "• 👥 Всего пользователей: " + totalUsers + "\n" +
                 "• 👥 Уникальных пользователей: " + totalUsersUnique + "\n" +
                 "• 🚫 Заблокированных: " + blockedUsers + "\n" +

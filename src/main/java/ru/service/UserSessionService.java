@@ -1,6 +1,7 @@
 package ru.service;
 
 import ru.model.enums.AdminAppointmentState;
+import ru.model.enums.PaymentState;
 import ru.model.enums.UserAppointmentState;
 
 import java.time.LocalDateTime;
@@ -43,6 +44,8 @@ public interface UserSessionService {
     void clearPendingName(Long chatId);
 
     void setAdminState(Long chatId, AdminAppointmentState state);
+
+    void setAdminStateForPayment(Long chatId, PaymentState paymentState);
 
     AdminAppointmentState getAdminState(Long chatId);
 

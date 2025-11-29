@@ -8,20 +8,20 @@ import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import ru.model.Appointment;
 import ru.model.User;
-import ru.model.enums.AdminAppointmentState;
-import ru.model.enums.StatusAppointment;
-import ru.model.enums.UserAppointmentState;
-import ru.model.enums.UserRole;
+import ru.model.enums.*;
 import ru.service.*;
 import ru.util.AdminKeyboard;
 import ru.util.KeyboardFactory;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static ru.util.BotConstants.*;
 
@@ -38,6 +38,8 @@ public class TextMessageHandler {
     private final WorkScheduleService workScheduleService;
     private final AdminKeyboard adminKeyboard;
     private final FloodProtectionService floodProtectionService;
+    private final PaymentSessionService paymentSessionService;
+    private final PaymentService paymentService;
 
     public void handleTextMessage(Update update) {
         Message message = update.getMessage();
@@ -66,25 +68,15 @@ public class TextMessageHandler {
             return;
         }
 
+        PaymentState paymentState = paymentSessionService.getPaymentState(chatId);
+        if (paymentState != null) {
+            handlePaymentState(chatId, text, paymentState);
+            return;
+        }
         UserAppointmentState userState = appointmentService.getUserState(chatId);
         AdminAppointmentState adminState = appointmentService.getAdminState(chatId);
         log.debug("👑 Admin mode: chatId={}, adminState={}", chatId, adminState);
         log.debug("👤 User state: {}", userState);
-
-        if (CMD_START.equalsIgnoreCase(text) || CMD_BEGIN.equalsIgnoreCase(text)) {
-            sendWelcome(chatId);
-            return;
-        }
-
-        // Обработка обычного пользователя
-        if (UserAppointmentState.STATE_AWAITING_NAME.equals(userState)) {
-            handleUserName(chatId, text, message.getMessageId());
-            return;
-        }
-        if (UserAppointmentState.STATE_AWAITING_PHONE.equals(userState)) {
-            handleUserPhone(chatId, text, message.getMessageId(), false, message.getFrom().getUserName());
-            return;
-        }
 
         // Обработка админа
         if ("ADMIN".equals(role)) {
@@ -101,8 +93,161 @@ public class TextMessageHandler {
             return;
         }
 
+        // Обработка обычного пользователя
+        if (UserAppointmentState.STATE_AWAITING_NAME.equals(userState)) {
+            handleUserName(chatId, text, message.getMessageId());
+            return;
+        }
+        if (UserAppointmentState.STATE_AWAITING_PHONE.equals(userState)) {
+            handleUserPhone(chatId, text, message.getMessageId(), false, message.getFrom().getUserName());
+            return;
+        }
+
+        if (CMD_START.equalsIgnoreCase(text) || CMD_BEGIN.equalsIgnoreCase(text)) {
+            sendWelcome(chatId);
+            return;
+        }
+
         // Неизвестная команда → показать главное меню
         notificationService.sendMainMenu(chatId, "Выберите действие:");
+    }
+
+    private void handlePaymentState(Long chatId, String text, PaymentState state) {
+        log.info("Обработка платежного состояния: {}", state);
+
+        switch (state) {
+            case AWAITING_AMOUNT -> handlePaymentAmount(chatId, text);
+            case AWAITING_CLIENT_PHONE -> handlePaymentClientPhone(chatId, text);
+            case AWAITING_CLIENT_NAME -> handlePaymentClientName(chatId, text);
+            case AWAITING_CONFIRMATION -> showPaymentConfirmation(chatId);
+            case AWAITING_STATS_START_DATE -> handleStatsStartDateInput(chatId, text);
+            case AWAITING_STATS_END_DATE -> handleStatsEndDateInput(chatId, text);
+            default -> log.warn("Неизвестное платежное состояние: {}", state);
+        }
+    }
+
+    private void handleStatsStartDateInput(Long chatId, String text) {
+        if (text.equalsIgnoreCase("/cancel")) {
+            paymentSessionService.clearPaymentState(chatId);
+            notificationService.sendMessage(chatId, "❌ Операция отменена", adminKeyboard.getStatisticsMenu());
+            return;
+        }
+        try {
+            log.info("Обработка даты начала периода: {}", text);
+            LocalDate startDate = parseDateInput(text);
+            paymentSessionService.setStatsStartDate(chatId, startDate);
+            paymentSessionService.setPaymentState(chatId, PaymentState.AWAITING_STATS_END_DATE);
+            String message = "📅 *Ввод конечной даты периода для статистики*\n\n" +
+                    "Начальная дата: *%s*\n".formatted(startDate.format(DATE_FORMAT)) +
+                    "Введите *конечную дату* в формате *ДД.ММ.ГГГГ*";
+            notificationService.sendMessage(chatId, message, keyboardFactory.cancelStatsButton());
+        } catch (DateTimeParseException e) {
+            log.error("Ошибка при обработке даты выбора начала периода", e);
+            paymentSessionService.clearPaymentState(chatId);
+            notificationService.sendMessage(chatId, "❌ Неверный формат даты. Введите дату в формате ДД.ММ.ГГГГ");
+        }
+    }
+
+    private void handleStatsEndDateInput(Long chatId, String text) {
+        if (text.equalsIgnoreCase("/cancel")) {
+            paymentSessionService.clearPaymentState(chatId);
+            notificationService.sendMessage(chatId, "❌ Операция отменена", adminKeyboard.getStatisticsMenu());
+            return;
+        }
+        try {
+            log.info("Обработка даты конца периода: {}", text);
+            LocalDate startDate = paymentSessionService.getStatsStartDate(chatId);
+            LocalDate endDate = parseDateInput(text);
+            if (endDate.isBefore(startDate)) {
+                notificationService.sendMessage(chatId,
+                        "❌ Конечная дата не может быть раньше начальной.\n" +
+                                "Введите корректную дату или /cancel.");
+                return;
+            }
+                paymentSessionService.setStatsEndDate(chatId, endDate);
+                paymentSessionService.clearPaymentState(chatId);
+                showCustomPeriodStats(chatId, null, startDate, endDate);
+        } catch (DateTimeParseException e) {
+            log.error("Ошибка при обработке даты выбора конца периода", e);
+            paymentSessionService.clearPaymentState(chatId);
+            notificationService.sendMessage(chatId, "❌ Неверный формат даты. Введите дату в формате ДД.ММ.ГГГГ");
+        }
+    }
+
+    private LocalDate parseDateInput(String text) {
+        if (text.equalsIgnoreCase("сегодня")) {
+            return LocalDate.now();
+        }
+        return LocalDate.parse(text.trim(), DATE_FORMAT);
+    }
+
+    private void handlePaymentAmount(Long chatId, String text) {
+        try {
+            String normalized = text.trim().replace(',', '.').replaceAll("\\s+", "");
+            BigDecimal amount = new BigDecimal(normalized);
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                notificationService.sendMessage(chatId, "❌ Сумма должна быть больше 0");
+                return;
+            }
+            paymentSessionService.setAmount(chatId, amount);
+            paymentSessionService.setPaymentState(chatId, PaymentState.AWAITING_SERVICE_TYPE);
+            String displayAmount = amount.stripTrailingZeros().toPlainString();
+
+            notificationService.sendMessage(chatId,
+                    "🎯 *Выбор услуги*\n\nСумма: " + displayAmount + " руб.\nВыберите тип услуги:",
+                    adminKeyboard.getServiceTypesKeyboard());
+
+        } catch (NumberFormatException | ArithmeticException e) {
+            notificationService.sendMessage(chatId, "❌ Введите корректную сумму (например: 1500 или 1200.50)");
+        }
+    }
+
+    private void handlePaymentClientPhone(Long chatId, String text) {
+        if ("/skip".equalsIgnoreCase(text)) {
+            paymentSessionService.setClientPhone(chatId, null);
+            paymentSessionService.setPaymentState(chatId, PaymentState.AWAITING_CLIENT_NAME);
+            notificationService.sendMessage(chatId, "👤 Введите имя клиента:");
+            return;
+        }
+        if (isValidPhone(text)) {
+            paymentSessionService.setClientPhone(chatId, text);
+            paymentSessionService.setPaymentState(chatId, PaymentState.AWAITING_CLIENT_NAME);
+            notificationService.sendMessage(chatId, "👤 Введите имя клиента:");
+        } else {
+            notificationService.sendMessage(chatId,
+                    "❌ Неверный формат номера телефона. Введите номер в формате +79991234567 или /skip:",
+                    adminKeyboard.getCancelPaymentKeyboard());
+        }
+    }
+
+    private void handlePaymentClientName(Long chatId, String text) {
+        paymentSessionService.setClientName(chatId, text);
+        paymentSessionService.setPaymentState(chatId, PaymentState.AWAITING_CONFIRMATION);
+        showPaymentConfirmation(chatId);
+    }
+
+    private void showPaymentConfirmation(Long chatId) {
+        BigDecimal amount = paymentSessionService.getAmount(chatId);
+        ServiceType serviceType = paymentSessionService.getServiceType(chatId);
+        LocalDateTime serviceDateTime = paymentSessionService.getServiceDate(chatId);
+        String clientPhone = paymentSessionService.getClientPhone(chatId);
+        String clientName = paymentSessionService.getClientName(chatId);
+
+        StringBuilder summary = new StringBuilder();
+        summary.append("✅ *Подтверждение платежа*\n\n");
+        summary.append("💵 Сумма: ").append(amount).append(" руб.\n");
+        summary.append("🎯 Услуга: ").append(serviceType.getDescription()).append("\n");
+        summary.append("📅 Дата и время: ").append(serviceDateTime.format(DATE_FORMAT))
+                .append(" ").append(serviceDateTime.format(TIME_FORMAT)).append("\n");
+        if (clientPhone != null) {
+            summary.append("📞 Телефон: ").append(clientPhone).append("\n");
+        }
+        if (clientName != null) {
+            summary.append("👤 Имя: ").append(clientName).append("\n");
+        }
+        summary.append("\n✅ Подтвердите платеж?");
+        notificationService.sendMessage(chatId, summary.toString(),
+                adminKeyboard.getConfirmPaymentKeyboard());
     }
 
     private void handleAdminOverrideReason(Long chatId, String text) {
@@ -118,8 +263,10 @@ public class TextMessageHandler {
             LocalTime end = userSessionService.getPendingEndTime(chatId);
             workScheduleService.setWorkDayOverride(date, start, end, true, reason);
         }
-        notificationService.sendMessage(chatId, "✅ Исключение добавлено!");
         userSessionService.clearAdminState(chatId);
+        userSessionService.clearPendingName(chatId);
+        userSessionService.clearPendingDate(chatId);
+        notificationService.sendMessage(chatId, "✅ Исключение добавлено!");
         notificationService.sendOrEditMessage(chatId, null,
                 "🔐 *Админ-панель*", adminKeyboard.getMainAdminMenu());
     }
@@ -294,6 +441,61 @@ public class TextMessageHandler {
                 log.warn("Не удалось уведомить пользователя {}: {}", user.getId(), e.getMessage());
             }
         }
+    }
+
+    private void showCustomPeriodStats(Long chatId, Integer messageId, LocalDate startDate, LocalDate endDate) {
+        try {
+            log.info("Показ статистики за выбранный период");
+            BigDecimal totalIncome = paymentService.getIncomeForPeriod(startDate, endDate);
+            Map<LocalDate, BigDecimal> dailySums = paymentService.getDetailedIncomeForPeriod(startDate, endDate);
+            String statsText = buildCustomPeriodStats(totalIncome, dailySums, startDate, endDate);
+            paymentSessionService.clearPaymentState(chatId);
+            notificationService.sendOrEditMessage(chatId, messageId, statsText, adminKeyboard.getStatisticsMenu());
+        } catch (Exception e) {
+            log.error("Ошибка при получении статистики за период: {}", e.getMessage(), e);
+            notificationService.sendOrEditMessage(chatId, messageId,
+                    "❌ Ошибка при получении статистики", adminKeyboard.getStatisticsMenu());
+        }
+    }
+
+    private String buildCustomPeriodStats(BigDecimal totalIncome, Map<LocalDate, BigDecimal> dailySums,
+                                          LocalDate startDate, LocalDate endDate) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("📊 *Статистика за период*\n\n");
+        sb.append("💵 Общая сумма: *").append(totalIncome != null ? totalIncome : BigDecimal.ZERO)
+                .append(" руб.*\n");
+        sb.append("📅 Период: ").append(startDate.format(DATE_FORMAT))
+                .append(" - ").append(endDate.format(DATE_FORMAT)).append("\n\n");
+
+        sb.append("*Детализация по дням:*\n");
+
+        if (dailySums == null || dailySums.isEmpty()) {
+            sb.append("   └── Платежей нет\n");
+        } else {
+            LocalDate current = startDate;
+            while (!current.isAfter(endDate)) {
+                BigDecimal dayAmount = dailySums.get(current);
+                String dayName = adminKeyboard.getShortDayName(current.getDayOfWeek().getValue());
+                String amountStr = (dayAmount != null && dayAmount.compareTo(BigDecimal.ZERO) > 0)
+                        ? String.format("%.2f руб.", dayAmount)
+                        : "—";
+
+                sb.append(String.format("   %s %s | *%s*\n",
+                        dayName, current.format(DateTimeFormatter.ofPattern("dd.MM")), amountStr));
+
+                current = current.plusDays(1);
+            }
+        }
+
+        long daysWithPayments = dailySums != null ?
+                dailySums.values().stream().filter(amount -> amount != null &&
+                        amount.compareTo(BigDecimal.ZERO) > 0).count() : 0;
+
+        sb.append("\n📈 *Итого:* ").append(daysWithPayments)
+                .append(" дней с платежами из ").append(startDate.until(endDate).getDays() + 1);
+
+        return sb.toString();
     }
 
     private void deletePendingMessage(Long chatId, Integer messageId) {
