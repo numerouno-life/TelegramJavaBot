@@ -41,6 +41,7 @@ build/
 *.env
 .idea/
 
-echo ".gigaide/" >> .gitignore
-echo ".tool-versions" >> .gitignore
-echo "dump.rdb" >> .gitignore
+.gigaide/
+.tool-versions
+dump.rdb
+docs/

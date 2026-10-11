@@ -3,6 +3,7 @@ package ru.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
@@ -123,6 +124,36 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public void getUserManagementMenu(Long chatId, String text) {
         sendMessage(chatId, text, adminKeyboard.getUserManagementMenu());
+    }
+
+    @Override
+    public void answerCallbackQuery(String callbackQueryId) {
+        if (callbackQueryId == null || callbackQueryId.isBlank()) {
+            return;
+        }
+        try {
+            telegramClient.execute(AnswerCallbackQuery.builder()
+                    .callbackQueryId(callbackQueryId)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Не удалось закрыть callback query {}: {}", callbackQueryId, e.getMessage());
+        }
+    }
+
+    @Override
+    public void answerCallbackQuery(String callbackQueryId, String text, boolean showAlert) {
+        if (callbackQueryId == null || callbackQueryId.isBlank()) {
+            return;
+        }
+        try {
+            telegramClient.execute(AnswerCallbackQuery.builder()
+                    .callbackQueryId(callbackQueryId)
+                    .text(text)
+                    .showAlert(showAlert)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Не удалось закрыть callback query {}: {}", callbackQueryId, e.getMessage());
+        }
     }
 
     // Универсальный execute

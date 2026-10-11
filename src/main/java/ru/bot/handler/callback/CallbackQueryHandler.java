@@ -20,7 +20,6 @@ import ru.service.UserService;
 @RequiredArgsConstructor
 public class CallbackQueryHandler {
 
-    @Autowired
     private final NotificationService notificationService;
     private final AdminCallbackHandler adminCallbackHandler;
     private final UserService userService;
@@ -29,10 +28,22 @@ public class CallbackQueryHandler {
     private final PaymentCallbackHandler paymentCallbackHandler;
 
     public void handleCallbackQuery(CallbackQuery callbackQuery) {
+        if (callbackQuery == null) {
+            return;
+        }
+
+        // Немедленно гасим индикатор загрузки на кнопке у пользователя
+        notificationService.answerCallbackQuery(callbackQuery.getId());
+
         String data = callbackQuery.getData();
-        Long chatId = callbackQuery.getMessage().getChatId();
-        Integer messageId = callbackQuery.getMessage().getMessageId();
-        Long userId = callbackQuery.getFrom().getId();
+        Long chatId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getChatId() : null;
+        Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+        Long userId = callbackQuery.getFrom() != null ? callbackQuery.getFrom().getId() : null;
+
+        if (chatId == null || userId == null) {
+            log.warn("Получен callbackQuery с пустым chatId или userId");
+            return;
+        }
 
         if (floodProtectionService.isFloodDetected(userId, data)) {
             log.warn("Флуд защита сработала для пользователя {} в коллбэке", userId);

@@ -21,4 +21,8 @@ public interface NotificationService {
     void getUserManagementMenu(Long chatId, String text);
 
     Message sendMessageAndReturn(Long chatId, String text, InlineKeyboardMarkup replyMarkup);
+
+    void answerCallbackQuery(String callbackQueryId);
+
+    void answerCallbackQuery(String callbackQueryId, String text, boolean showAlert);
 }
