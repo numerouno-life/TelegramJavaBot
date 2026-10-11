@@ -1,11 +1,11 @@
 package ru.util;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import ru.model.enums.CallbackPaymentType;
+import ru.model.enums.CallbackType;
 import ru.model.enums.UserRole;
 
 import java.time.LocalDate;
@@ -20,15 +20,17 @@ import java.util.Locale;
 import static ru.util.BotConstants.*;
 
 @Component
-@Slf4j
 public class KeyboardFactory {
+
+    private static final DateTimeFormatter DATE_DAY_OF_WEEK_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru"));
 
     public InlineKeyboardMarkup mainMenu() {
         return new InlineKeyboardMarkup(List.of(
-                row(CMD_BOOK, "book_appointment"),
-                row(CMD_MY_APPOINTMENTS, "my_appointments"),
-                row(CMD_HISTORY, "history"),
-                row(CMD_CONTACTS, "contacts")
+                row(CMD_BOOK, CallbackType.BOOK_APPOINTMENT.getPrefix()),
+                row(CMD_MY_APPOINTMENTS, CallbackType.MY_APPOINTMENTS.getPrefix()),
+                row(CMD_HISTORY, CallbackType.HISTORY.getPrefix()),
+                row(CMD_CONTACTS, CallbackType.CONTACTS.getPrefix())
         ));
     }
 
@@ -38,30 +40,21 @@ public class KeyboardFactory {
     }
 
     public InlineKeyboardMarkup cancelStatsButton() {
-        return new InlineKeyboardMarkup(List.of(row("⬅️ Назад в меню статистики",
-                CallbackPaymentType.PAYMENT_CANCEL_STATS.getPrefix())));
+        return backButton("⬅️ Назад в меню статистики", CallbackPaymentType.PAYMENT_CANCEL_STATS.getPrefix());
     }
 
     // Универсальный метод: одна кнопка
     public InlineKeyboardMarkup singleButton(String text, String callbackData) {
-        return new InlineKeyboardMarkup(List.of(row(text, callbackData)));
+        return backButton(text, callbackData);
     }
 
     // Универсальный метод: одна кнопка внизу под текстом
     public InlineKeyboardMarkup withBackButton(String text, String callbackText, String callbackData) {
-        return new InlineKeyboardMarkup(List.of(
-                new InlineKeyboardRow(InlineKeyboardButton.builder()
-                        .text(callbackText)
-                        .callbackData(callbackData)
-                        .build())
-        ));
+        return backButton(callbackText, callbackData);
     }
 
     public InlineKeyboardButton backToAdminMenu() {
-        return InlineKeyboardButton.builder()
-                .text("⬅️ В админ-меню")
-                .callbackData("admin_back")
-                .build();
+        return createButton("⬅️ В админ-меню", CallbackType.ADMIN_BACK.getPrefix());
     }
 
     // Пагинация для истории записей
@@ -81,51 +74,48 @@ public class KeyboardFactory {
         }
 
         // Кнопка "Назад в меню"
-        rows.add(backButton("🏠 В меню", "back_to_menu").getKeyboard().get(0));
+        rows.add(row("🏠 В меню", CallbackType.BACK_TO_MENU.getPrefix()));
 
         return new InlineKeyboardMarkup(rows);
     }
 
     // Кнопки отмены записи
+    public InlineKeyboardMarkup userCancelAppointmentButton(Long appointmentId) {
+        return userCancelAppointmentButton(appointmentId, null);
+    }
+
     public InlineKeyboardMarkup userCancelAppointmentButton(Long appointmentId, LocalDateTime dateTime) {
-        List<InlineKeyboardRow> rows = new ArrayList<>();
-        InlineKeyboardRow row = new InlineKeyboardRow();
-        row.add(createButton("❌ Отменить", "cancel_" + appointmentId));
-        row.add(createButton("⬅️ Назад", "back_to_menu"));
-        rows.add(row);
-        return new InlineKeyboardMarkup(rows);
+        return new InlineKeyboardMarkup(List.of(
+                row(
+                        createButton("❌ Отменить", CallbackType.CANCEL.getPrefix() + appointmentId),
+                        createButton("⬅️ Назад", CallbackType.BACK_TO_MENU.getPrefix())
+                )
+        ));
     }
 
     // Клавиатура выбора времени
     public InlineKeyboardMarkup timeSelectionKeyboard(LocalDate date, List<LocalDateTime> availableSlots,
                                                       UserRole userRole) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
-        InlineKeyboardRow currentRow = new InlineKeyboardRow();
 
-        for (LocalDateTime slot : availableSlots) {
-            if (slot.isAfter(LocalDateTime.now())) {
-                currentRow.add(createButton(
-                        "🟢 " + slot.toLocalTime().format(TIME_FORMAT),
-                        "time_" + slot
-                ));
+        if (availableSlots != null) {
+            LocalDateTime now = LocalDateTime.now();
+            List<InlineKeyboardButton> buttons = availableSlots.stream()
+                    .filter(slot -> slot.isAfter(now))
+                    .map(slot -> createButton(
+                            "🟢 " + slot.toLocalTime().format(TIME_FORMAT),
+                            CallbackType.TIME.getPrefix() + slot
+                    ))
+                    .toList();
 
-                if (currentRow.size() == 3) {
-                    rows.add(currentRow);
-                    currentRow = new InlineKeyboardRow();
-                }
-            }
-        }
-
-        if (!currentRow.isEmpty()) {
-            rows.add(currentRow);
+            rows.addAll(createRows(buttons, 3));
         }
 
         // Кнопка "Назад" к датам
         if (userRole == UserRole.USER) {
-            rows.add(backButton("⬅️ Назад", "back_to_dates").getKeyboard().get(0));
-        }
-        if (userRole == UserRole.ADMIN) {
-            rows.add(backButton("⬅️ Назад", "admin_back").getKeyboard().get(0));
+            rows.add(row("⬅️ Назад", CallbackType.BACK_TO_DATES.getPrefix()));
+        } else if (userRole == UserRole.ADMIN) {
+            rows.add(row("⬅️ Назад", CallbackType.ADMIN_BACK.getPrefix()));
         }
 
         return new InlineKeyboardMarkup(rows);
@@ -133,47 +123,51 @@ public class KeyboardFactory {
 
     public InlineKeyboardMarkup timeSelectionKeyboardForPayment(LocalDate date, List<LocalTime> availableTimes) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
-        for (int i = 0; i < availableTimes.size(); i += 3) {
-            List<InlineKeyboardButton> rowButtons = new ArrayList<>();
-            for (int j = i; j < Math.min(i + 3, availableTimes.size()); j++) {
-                LocalTime time = availableTimes.get(j);
-                String callbackData = "payment:time_" + date + "_" + time;
-                rowButtons.add(createButton(time.format(DateTimeFormatter.ofPattern("HH:mm")), callbackData));
-            }
-            rows.add(new InlineKeyboardRow(rowButtons));
+
+        if (availableTimes != null) {
+            List<InlineKeyboardButton> buttons = availableTimes.stream()
+                    .map(time -> createButton(
+                            time.format(TIME_FORMAT),
+                            CallbackPaymentType.PAYMENT_SELECT_TIME.getPrefix() + date + "_" + time
+                    ))
+                    .toList();
+
+            rows.addAll(createRows(buttons, 3));
         }
-        rows.add(backButton("❌ Отменить платеж", "payment:cancel").getKeyboard().get(0));
+
+        rows.add(row("❌ Отменить платеж", CallbackPaymentType.PAYMENT_CANCEL.getPrefix()));
         return new InlineKeyboardMarkup(rows);
     }
 
     public InlineKeyboardMarkup dateSelectionKeyboardForPayment(List<LocalDate> availableDates, UserRole userRole) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
-        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru"));
 
-        for (LocalDate date : availableDates) {
-            String callbackData = "payment:date_" + date;
-            rows.add(row(date.format(dateFormat), callbackData));
+        if (availableDates != null) {
+            for (LocalDate date : availableDates) {
+                String callbackData = CallbackPaymentType.PAYMENT_SELECT_DATE.getPrefix() + date;
+                rows.add(row(date.format(DATE_DAY_OF_WEEK_FORMAT), callbackData));
+            }
         }
-        backToAdminMenu();
-        rows.add(backButton("❌ Отменить платеж", "payment:cancel").getKeyboard().get(0));
+
+        rows.add(row("❌ Отменить платеж", CallbackPaymentType.PAYMENT_CANCEL.getPrefix()));
         return new InlineKeyboardMarkup(rows);
     }
 
     // Клавиатура выбора даты
     public InlineKeyboardMarkup dateSelectionKeyboard(List<LocalDate> availableDates, UserRole userRole) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
-        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd.MM (E)", new Locale("ru"));
 
-        for (LocalDate date : availableDates) {
-            rows.add(row(date.format(dateFormat), "date_" + date));
+        if (availableDates != null) {
+            for (LocalDate date : availableDates) {
+                rows.add(row(date.format(DATE_DAY_OF_WEEK_FORMAT), CallbackType.DATE.getPrefix() + date));
+            }
         }
 
         // Кнопка "Назад" к меню
         if (userRole == UserRole.USER) {
-            rows.add(backButton("⬅️ Назад в меню", "back_to_menu").getKeyboard().get(0));
-        }
-        if (userRole == UserRole.ADMIN) {
-            rows.add(backButton("⬅️ Назад в меню записей", "admin:menu:appointments").getKeyboard().get(0));
+            rows.add(row("⬅️ Назад в меню", CallbackType.BACK_TO_MENU.getPrefix()));
+        } else if (userRole == UserRole.ADMIN) {
+            rows.add(row("⬅️ Назад в меню записей", CallbackType.ADMIN_MENU_APPOINTMENTS.getPrefix()));
         }
 
         return new InlineKeyboardMarkup(rows);
@@ -194,9 +188,34 @@ public class KeyboardFactory {
 
     // Универсальный метод создания строки из нескольких кнопок
     public InlineKeyboardRow row(InlineKeyboardButton... buttons) {
-        InlineKeyboardRow row = new InlineKeyboardRow();
-        row.addAll(Arrays.asList(buttons));
-        return row;
+        InlineKeyboardRow keyboardRow = new InlineKeyboardRow();
+        if (buttons != null) {
+            keyboardRow.addAll(Arrays.asList(buttons));
+        }
+        return keyboardRow;
+    }
+
+    /**
+     * Разбивает список кнопок на строки с заданным количеством колонок.
+     */
+    public List<InlineKeyboardRow> createRows(List<InlineKeyboardButton> buttons, int columns) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        if (buttons == null || buttons.isEmpty() || columns <= 0) {
+            return rows;
+        }
+
+        InlineKeyboardRow currentRow = new InlineKeyboardRow();
+        for (InlineKeyboardButton button : buttons) {
+            currentRow.add(button);
+            if (currentRow.size() == columns) {
+                rows.add(currentRow);
+                currentRow = new InlineKeyboardRow();
+            }
+        }
+        if (!currentRow.isEmpty()) {
+            rows.add(currentRow);
+        }
+        return rows;
     }
 
     // Создание клавиатуры из нескольких строк
