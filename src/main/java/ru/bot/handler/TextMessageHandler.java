@@ -510,31 +510,22 @@ public class TextMessageHandler {
     }
 
     public void startAppointmentProcess(Long chatId, Integer messageId) {
-        if (messageId != null) {
-            notificationService.deleteMessage(chatId, messageId);
-        }
         appointmentService.setUserState(chatId, UserAppointmentState.STATE_AWAITING_DATE);
-        sendDateSelection(chatId, null);
+        sendDateSelection(chatId, messageId);
     }
 
     public void sendDateSelection(Long chatId, Integer messageId) {
-        if (messageId != null) {
-            notificationService.deleteMessage(chatId, messageId);
-        }
-
         LocalDate today = LocalDate.now();
-        List<LocalDate> availableDates = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = today.plusDays(i);
-            if (appointmentService.isWorkingDay(date)) {
-                List<LocalDateTime> slots = appointmentService.getAvailableTimeSlots(date.atStartOfDay());
-                if (!slots.isEmpty()) availableDates.add(date);
-            }
-        }
+        List<LocalDate> availableDates = appointmentService.getAvailableDates(today, 7);
 
         InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates, UserRole.USER);
-        Message message = notificationService.sendMessageAndReturn(chatId, "Выберите дату записи:", markup);
-        appointmentService.setPendingMessageId(chatId, message.getMessageId());
+        if (messageId != null) {
+            notificationService.sendOrEditMessage(chatId, messageId, "Выберите дату записи:", markup);
+            appointmentService.setPendingMessageId(chatId, messageId);
+        } else {
+            Message message = notificationService.sendMessageAndReturn(chatId, "Выберите дату записи:", markup);
+            appointmentService.setPendingMessageId(chatId, message.getMessageId());
+        }
     }
 
     // Чистка состояния при ошибках

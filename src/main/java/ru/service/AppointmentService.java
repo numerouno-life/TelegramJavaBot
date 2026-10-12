@@ -29,6 +29,8 @@ public interface AppointmentService {
 
     List<LocalDateTime> getAvailableTimeSlots(LocalDateTime date);
 
+    List<LocalDate> getAvailableDates(LocalDate startDate, int daysCount);
+
     void setPendingDate(Long chatId, LocalDateTime dateTime);
 
     LocalDateTime getPendingDate(Long chatId);

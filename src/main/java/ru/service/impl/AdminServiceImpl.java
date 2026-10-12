@@ -2,6 +2,7 @@ package ru.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
@@ -86,6 +87,7 @@ public class AdminServiceImpl implements AdminService {
     // блокировка пользователя
     @Override
     @Transactional
+    @CacheEvict(value = "user_blocked", key = "#userId")
     public void blockUser(Long userId) {
         User user = userRepository.findByTelegramId(userId).orElseThrow();
         user.setIsBlocked(true);
@@ -96,6 +98,7 @@ public class AdminServiceImpl implements AdminService {
     // разблокировка пользователя
     @Override
     @Transactional
+    @CacheEvict(value = "user_blocked", key = "#userId")
     public void unblockUser(Long userId) {
         userRepository.findByTelegramId(userId).ifPresent(user -> {
             user.setIsBlocked(false);
@@ -132,29 +135,33 @@ public class AdminServiceImpl implements AdminService {
 
         InlineKeyboardMarkup markup = keyboardFactory.timeSelectionKeyboard(date, availableSlots, UserRole.ADMIN);
         String text = "Доступное время на " + date.format(DateTimeFormatter.ofPattern("dd.MM (E)")) + ":\n🟢 - свободно";
-        Message sentMessage = notificationService.sendMessageAndReturn(chatId, text, markup);
-        appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
+        notificationService.sendOrEditMessage(chatId, messageId, text, markup);
+        if (messageId != null) {
+            appointmentService.setPendingMessageId(chatId, messageId);
+        }
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = "user_admin", key = "#userId")
     public void assignAdmin(Long userId) {
         userRepository.findByTelegramId(userId).ifPresent(user -> {
             log.info("🔄 Изменение роли с {}, на ADMIN для пользователя {}", user.getRole(), userId);
             user.setRole(UserRole.ADMIN);
             userRepository.save(user);
-            log.info("🔄 Роль пользователя {} успешно изменена", userId);
+            log.info("🔄 Роль пользователя {} успешно изменена на ADMIN", userId);
         });
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = "user_admin", key = "#userId")
     public void removeAdmin(Long userId) {
         userRepository.findByTelegramId(userId).ifPresent(user -> {
             log.info("🔄 Изменение роли с {}, на USER для пользователя {}", user.getRole(), userId);
             user.setRole(UserRole.USER);
             userRepository.save(user);
-            log.info("🔄 Роль пользователя {} успешно изменена", userId);
+            log.info("🔄 Роль пользователя {} успешно изменена на USER", userId);
         });
     }
 

@@ -2,6 +2,10 @@ package ru.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.model.LunchBreak;
@@ -19,12 +23,15 @@ public class LunchBreakServiceImpl implements LunchBreakService {
 
     private final LunchBreakRepository lunchBreakRepository;
 
+    @Lazy
+    @Autowired
+    private LunchBreakService self;
+
     @Override
     public boolean isLunchTime(LocalDateTime dateTime) {
-        log.info("Check if lunch time");
         if (dateTime == null) return false;
 
-        LunchBreak lunchBreak = getLunchBreakByDayOfWeek(dateTime.getDayOfWeek().getValue());
+        LunchBreak lunchBreak = self.getLunchBreakByDayOfWeek(dateTime.getDayOfWeek().getValue());
         if (lunchBreak == null || !lunchBreak.getIsActive()) {
             return false;
         }
@@ -32,19 +39,18 @@ public class LunchBreakServiceImpl implements LunchBreakService {
         LocalTime slotStart = dateTime.toLocalTime();
 
         // пропускаем только слот, который начинается во время обеда
-        // Слот 14:00-15:00 начинается в 14:00, что во время обеда 14:00-15:00 → пропускаем
-        // Слот 13:00-14:00 начинается в 13:00, что ДО обеда → НЕ пропускаем
-        // Слот 15:00-16:00 начинается в 15:00, что ПОСЛЕ обеда → НЕ пропускаем
         return !slotStart.isBefore(lunchBreak.getStartTime()) && slotStart.isBefore(lunchBreak.getEndTime());
     }
 
     @Override
+    @Cacheable(value = "lunch_break_day", key = "#dayOfWeek")
     public LunchBreak getLunchBreakByDayOfWeek(Integer dayOfWeek) {
-        log.info("Get lunch break by day of week");
+        log.info("Get lunch break by day of week: {}", dayOfWeek);
         return lunchBreakRepository.findByDayOfWeek(dayOfWeek);
     }
 
     @Override
+    @Cacheable(value = "lunch_break_all")
     public List<LunchBreak> getAllLunchBreaks() {
         log.info("Get all lunch breaks");
         return lunchBreakRepository.findAllByOrderByDayOfWeekAsc();
@@ -52,8 +58,9 @@ public class LunchBreakServiceImpl implements LunchBreakService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"lunch_break_day", "lunch_break_all"}, allEntries = true)
     public void updateLunchBreak(Integer dayOfWeek, LocalTime startTime, LocalTime endTime, boolean isActive) {
-        log.info("Update lunch break");
+        log.info("Update lunch break for day of week: {}", dayOfWeek);
         var lunchBreak = lunchBreakRepository.findByDayOfWeek(dayOfWeek);
         if (lunchBreak == null) {
             log.warn("Обеденный перерыв не найден");

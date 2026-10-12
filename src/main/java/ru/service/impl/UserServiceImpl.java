@@ -3,6 +3,8 @@ package ru.service.impl;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.model.User;
@@ -76,6 +78,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Cacheable(value = "user_admin", key = "#chatId")
     public Boolean isAdmin(Long chatId) {
         return findByTelegramId(chatId)
                 .map(user -> UserRole.ADMIN.equals(user.getRole()))
@@ -83,6 +86,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Cacheable(value = "user_blocked", key = "#userId")
     public boolean isBlocked(Long userId) {
         return userRepository.findByTelegramId(userId)
                 .map(User::getIsBlocked)

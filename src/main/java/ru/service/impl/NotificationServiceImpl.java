@@ -60,6 +60,10 @@ public class NotificationServiceImpl implements NotificationService {
                         .build();
                 execute(edit);
             } catch (Exception e) {
+                if (e.getMessage() != null && e.getMessage().contains("message is not modified")) {
+                    log.debug("Сообщение {} не изменилось, повторная отправка не требуется", messageId);
+                    return;
+                }
                 log.warn("Не удалось отредактировать сообщение {}, отправляю новое сообщение", messageId, e);
                 sendMessage(chatId, text, replyMarkup);
             }
@@ -101,13 +105,18 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public void sendContacts(Long chatId) {
+        sendContacts(chatId, null);
+    }
+
+    @Override
+    public void sendContacts(Long chatId, Integer messageId) {
         String contacts = """
                 📍 Наш адрес: ул. Славского, д. 6
                 📞 Телефон: +7 (986) 736-70-77
                 🕒 Часы работы: 10:00 - 20:00
                 💻 Сайт: https://yandex.ru/maps/org/aura/137741913962/?ll=49.560800%2C54.236732&z=16
                 """;
-        sendOrEditMessage(chatId, null,
+        sendOrEditMessage(chatId, messageId,
                 contacts, keyboardFactory.backButton("🏠 В меню", "back_to_menu"));
     }
 

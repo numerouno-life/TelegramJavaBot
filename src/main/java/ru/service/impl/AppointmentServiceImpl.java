@@ -1,5 +1,6 @@
 package ru.service.impl;
 
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import static ru.util.BotConstants.DATE_FORMAT;
 import static ru.util.BotConstants.TIME_FORMAT;
@@ -41,6 +47,13 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final UserRepository userRepository;
     private final KeyboardFactory keyboardFactory;
     private final LunchBreakService lunchBreakService;
+
+    private final ExecutorService asyncNotificationExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    @PreDestroy
+    public void shutdown() {
+        asyncNotificationExecutor.shutdown();
+    }
 
     @Override
     public void setUserState(Long chatId, UserAppointmentState state) {
@@ -147,14 +160,27 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
         // 2. Получаем рабочее время
         LocalTime[] workTime = workScheduleService.getWorkTimeForDate(localDate);
+        if (workTime == null) {
+            return List.of();
+        }
 
         LocalTime startTime = workTime[0];
         LocalTime endTime = workTime[1];
 
-        // 3. Генерируем слоты (по 1 часу)
+        // 3. Загружаем все активные записи за этот день одним запросом
+        LocalDateTime dayStart = localDate.atStartOfDay();
+        LocalDateTime dayEnd = localDate.atTime(23, 59, 59);
+        List<Appointment> dayAppointments = appointmentRepository
+                .findByDateTimeBetweenAndStatusOrderByDateTimeAsc(dayStart, dayEnd, StatusAppointment.ACTIVE);
+        Set<LocalDateTime> bookedSlots = dayAppointments.stream()
+                .map(Appointment::getDateTime)
+                .collect(Collectors.toSet());
+
+        // 4. Генерируем слоты (по 1 часу)
         LocalDateTime current = localDate.atTime(startTime);
         LocalDateTime end = localDate.atTime(endTime);
         List<LocalDateTime> availableSlots = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
 
         while (!current.isAfter(end)) {
             // Пропускаем слоты, которые попадают на обеденное время
@@ -163,12 +189,62 @@ public class AppointmentServiceImpl implements AppointmentService {
                 continue;
             }
 
-            if (current.isAfter(LocalDateTime.now()) && isTimeSlotAvailable(current)) {
+            if (current.isAfter(now) && !bookedSlots.contains(current)) {
                 availableSlots.add(current);
             }
             current = current.plusHours(1);
         }
         return availableSlots;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LocalDate> getAvailableDates(LocalDate startDate, int daysCount) {
+        LocalDateTime periodStart = startDate.atStartOfDay();
+        LocalDateTime periodEnd = startDate.plusDays(daysCount).atTime(23, 59, 59);
+
+        // 1 запрос к БД на весь период вместо N*11 запросов!
+        List<Appointment> periodAppointments = appointmentRepository
+                .findByDateTimeBetweenAndStatusOrderByDateTimeAsc(periodStart, periodEnd, StatusAppointment.ACTIVE);
+        Set<LocalDateTime> bookedSlots = periodAppointments.stream()
+                .map(Appointment::getDateTime)
+                .collect(Collectors.toSet());
+
+        LocalDateTime now = LocalDateTime.now();
+        List<LocalDate> availableDates = new ArrayList<>();
+
+        for (int i = 0; i < daysCount; i++) {
+            LocalDate date = startDate.plusDays(i);
+            if (!workScheduleService.isWorkingDay(date)) {
+                continue;
+            }
+
+            LocalTime[] workTime = workScheduleService.getWorkTimeForDate(date);
+            if (workTime == null) {
+                continue;
+            }
+
+            LocalTime start = workTime[0];
+            LocalTime end = workTime[1];
+            LocalDateTime current = date.atTime(start);
+            LocalDateTime endDateTime = date.atTime(end);
+
+            boolean hasSlot = false;
+            while (!current.isAfter(endDateTime)) {
+                if (!lunchBreakService.isLunchTime(current)
+                        && current.isAfter(now)
+                        && !bookedSlots.contains(current)) {
+                    hasSlot = true;
+                    break;
+                }
+                current = current.plusHours(1);
+            }
+
+            if (hasSlot) {
+                availableDates.add(date);
+            }
+        }
+        return availableDates;
     }
 
     @Override
@@ -285,8 +361,6 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private void notifyAdminsNewAppointment(Appointment appointment) {
-        List<User> admins = userRepository.findAllByRole(UserRole.ADMIN);
-
         String msg = String.format(
                 """
                         📢 Новая запись!
@@ -301,16 +375,21 @@ public class AppointmentServiceImpl implements AppointmentService {
                 appointment.getDateTime().format(DATE_FORMAT) + "-" + appointment.getDateTime().format(TIME_FORMAT)
         );
 
-        for (User admin : admins) {
-            if (admin.getTelegramId() != null && !admin.getIsBlocked()) {
-                notificationService.sendMessage(admin.getTelegramId(), msg);
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<User> admins = userRepository.findAllByRole(UserRole.ADMIN);
+                for (User admin : admins) {
+                    if (admin.getTelegramId() != null && !admin.getIsBlocked()) {
+                        notificationService.sendMessage(admin.getTelegramId(), msg);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Ошибка при асинхронной отправке уведомлений администраторам: {}", e.getMessage(), e);
             }
-        }
+        }, asyncNotificationExecutor);
     }
 
     public void cancellationNoticeForAdmins(Appointment appointment) {
-        List<User> admins = userRepository.findAllByRole(UserRole.ADMIN);
-
         String msg = String.format(
                 """
                         📢 Отмена записи!
@@ -318,7 +397,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                         👤 Клиент: %s %s (@%s)
                         📞 Телефон: %s
                         📅 Дата и время: %s""",
-                appointment.getUser().getFirstName(),
+                appointment.getUser().getFirstName() == null ? "" : appointment.getUser().getFirstName(),
                 appointment.getUser().getLastName() == null ? "" : appointment.getUser().getLastName(),
                 appointment.getUser().getUsername() == null ? "Нет NickName" : appointment.getUser().getUsername(),
                 appointment.getUser().getClientPhoneNumber(),
@@ -326,11 +405,18 @@ public class AppointmentServiceImpl implements AppointmentService {
         );
         InlineKeyboardMarkup backButton = keyboardFactory.backButton("⬅️ Назад", "back_to_menu");
 
-        for (User admin : admins) {
-            if (admin.getTelegramId() != null && !admin.getIsBlocked()) {
-                notificationService.sendOrEditMessage(admin.getTelegramId(), null, msg, backButton);
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<User> admins = userRepository.findAllByRole(UserRole.ADMIN);
+                for (User admin : admins) {
+                    if (admin.getTelegramId() != null && !admin.getIsBlocked()) {
+                        notificationService.sendOrEditMessage(admin.getTelegramId(), null, msg, backButton);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Ошибка при асинхронной отправке уведомления об отмене администраторам: {}", e.getMessage(), e);
             }
-        }
+        }, asyncNotificationExecutor);
     }
 
     @Override

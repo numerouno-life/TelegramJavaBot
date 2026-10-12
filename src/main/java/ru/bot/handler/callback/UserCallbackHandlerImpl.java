@@ -56,10 +56,10 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
             switch (type) {
                 case DATE -> handleDateSelection(chatId, messageId, data);
                 case TIME -> handleTimeSelection(chatId, messageId, data);
-                case BACK_TO_MENU -> handleBackToMenu(chatId);
+                case BACK_TO_MENU -> handleBackToMenu(chatId, messageId);
                 case BOOK_APPOINTMENT -> handleBookAppointment(chatId, messageId, userId);
-                case MY_APPOINTMENTS -> handleMyAppointments(chatId);
-                case CONTACTS -> handleContacts(chatId);
+                case MY_APPOINTMENTS -> handleMyAppointments(chatId, messageId);
+                case CONTACTS -> handleContacts(chatId, messageId);
                 case CANCEL -> handleCancelAppointment(chatId, messageId, data);
                 case BACK_TO_DATES -> handleBackToDates(chatId, messageId);
 
@@ -85,37 +85,36 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
     }
 
     private void sendTimeSelection(Long chatId, Integer messageId, LocalDate date) {
-        notificationService.deleteMessage(chatId, messageId);
         List<LocalDateTime> availableSlots = appointmentService.getAvailableTimeSlots(date.atStartOfDay())
                 .stream()
                 .filter(slot -> slot.isAfter(LocalDateTime.now()))
                 .toList();
 
         InlineKeyboardMarkup markup = keyboardFactory.timeSelectionKeyboard(date, availableSlots, UserRole.USER);
+        String text = "Доступное время на " + date.format(DateTimeFormatter.ofPattern("dd.MM (E)")) + ":\n🟢 - свободно";
 
-        Message sentMessage = notificationService.sendMessageAndReturn(chatId,
-                "Доступное время на " + date.format(DateTimeFormatter.ofPattern("dd.MM (E)")) + ":\n🟢 - свободно",
-                markup);
-
-        appointmentService.setPendingMessageId(chatId, sentMessage.getMessageId());
+        notificationService.sendOrEditMessage(chatId, messageId, text, markup);
+        if (messageId != null) {
+            appointmentService.setPendingMessageId(chatId, messageId);
+        }
     }
 
-    private void showLastAppointment(Long chatId) {
+    private void showLastAppointment(Long chatId, Integer messageId) {
         Optional<Appointment> lastOptional = appointmentService.getLastAppointment(chatId);
 
+        InlineKeyboardMarkup backButton = keyboardFactory.backButton("🏠 В меню", "back_to_menu");
         if (lastOptional.isEmpty()) {
-            notificationService.sendMessage(chatId, "У вас пока нет записей.");
+            notificationService.sendOrEditMessage(chatId, messageId, "У вас пока нет записей.", backButton);
             return;
         }
 
         Appointment last = lastOptional.get();
         LocalDateTime lastDateTime = last.getDateTime();
         LocalDateTime now = LocalDateTime.now();
-        InlineKeyboardMarkup backButton = keyboardFactory.backButton("🏠 В меню", "back_to_menu");
 
         if (lastDateTime.isBefore(now)) {
             // Прошедшая запись — кнопка отмены не нужна
-            notificationService.sendOrEditMessage(chatId, null,
+            notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Вы уже были записаны на стрижку.\n" +
                             "📅 Последняя запись: " + lastDateTime.format(DATE_FORMAT) +
                             " в " + lastDateTime.format(TIME_FORMAT) +
@@ -125,7 +124,7 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
         } else {
             // Активная запись — кнопка отмены доступна
             InlineKeyboardMarkup markup = keyboardFactory.userCancelAppointmentButton(last.getId(), lastDateTime);
-            notificationService.sendOrEditMessage(chatId, null,
+            notificationService.sendOrEditMessage(chatId, messageId,
                     "❌ Вы уже записаны на стрижку.\n" +
                             "📅 Последняя запись: " + lastDateTime.format(DATE_FORMAT) +
                             " в " + lastDateTime.format(TIME_FORMAT) +
@@ -138,9 +137,11 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
     private void showPastAppointments(Long chatId, Integer messageId, int page) {
         List<Appointment> past = appointmentService.getPastAppointments(chatId);
         if (past.isEmpty()) {
-            notificationService.sendOrEditMessage(chatId, messageId, "У вас нет прошлых записей.", null);
+            notificationService.sendOrEditMessage(chatId, messageId, "У вас нет прошлых записей.",
+                    keyboardFactory.backButton("🏠 В меню", "back_to_menu"));
             return;
         }
+
 
         int totalPages = (int) Math.ceil((double) past.size() / PAGE_SIZE_FIVE);
         if (page < 0) page = 0;
@@ -176,8 +177,7 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
                 (adminState == AdminAppointmentState.ADM_AWAITING_DATE);
 
         if (isAdminFlow) {
-            deletePendingMessage(chatId, messageId);
-            adminService.sendTimeSelectionForAdmin(chatId, null, selectedDate);
+            adminService.sendTimeSelectionForAdmin(chatId, messageId, selectedDate);
         } else {
             sendTimeSelection(chatId, messageId, selectedDate);
         }
@@ -232,17 +232,13 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
         }
     }
 
-    private void handleBackToMenu(Long chatId) {
-        Integer messageId = appointmentService.getPendingMessageId(chatId);
-        if (messageId != null) {
-            notificationService.deleteMessage(chatId, messageId);
-            appointmentService.clearPendingMessageId(chatId);
-        }
+    private void handleBackToMenu(Long chatId, Integer messageId) {
         userSessionService.clearAllSessions(chatId);
         userSessionService.clearRole(chatId);
+        appointmentService.clearPendingMessageId(chatId);
         List<Appointment> appointments = appointmentService.getUserAppointments(chatId);
         String text = appointments.isEmpty() ? "Добро пожаловать!" : "Выберите действие:";
-        notificationService.sendMainMenu(chatId, text);
+        notificationService.sendOrEditMessage(chatId, messageId, text, keyboardFactory.mainMenu());
     }
 
     private void handleBookAppointment(Long chatId, Integer messageId, Long userId) {
@@ -255,12 +251,12 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
         textMessageHandler.startAppointmentProcess(chatId, messageId);
     }
 
-    private void handleMyAppointments(Long chatId) {
-        showLastAppointment(chatId);
+    private void handleMyAppointments(Long chatId, Integer messageId) {
+        showLastAppointment(chatId, messageId);
     }
 
-    private void handleContacts(Long chatId) {
-        notificationService.sendContacts(chatId);
+    private void handleContacts(Long chatId, Integer messageId) {
+        notificationService.sendContacts(chatId, messageId);
     }
 
     private void handleCancelAppointment(Long chatId, Integer messageId, String data) {
@@ -289,14 +285,8 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
     }
 
     private void handleBackToDates(Long chatId, Integer messageId) {
-        Integer pendingMessageId = appointmentService.getPendingMessageId(chatId);
-        if (pendingMessageId != null) {
-            notificationService.deleteMessage(chatId, pendingMessageId);
-            appointmentService.clearPendingMessageId(chatId);
-        }
-
-        textMessageHandler.sendDateSelection(chatId, null);
         appointmentService.clearUserState(chatId);
+        textMessageHandler.sendDateSelection(chatId, messageId);
     }
 
     private void deletePendingMessage(Long chatId, Integer messageId) {
