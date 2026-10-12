@@ -137,9 +137,11 @@ public class UserCallbackHandlerImpl implements UserCallBackHandler {
     private void showPastAppointments(Long chatId, Integer messageId, int page) {
         List<Appointment> past = appointmentService.getPastAppointments(chatId);
         if (past.isEmpty()) {
-            notificationService.sendOrEditMessage(chatId, messageId, "У вас нет прошлых записей.", null);
+            notificationService.sendOrEditMessage(chatId, messageId, "У вас нет прошлых записей.",
+                    keyboardFactory.backButton("🏠 В меню", "back_to_menu"));
             return;
         }
+
 
         int totalPages = (int) Math.ceil((double) past.size() / PAGE_SIZE_FIVE);
         if (page < 0) page = 0;
