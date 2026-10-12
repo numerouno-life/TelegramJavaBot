@@ -563,11 +563,10 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
 
 
     private void createAppointmentByAdmin(Long chatId, Integer messageId) {
-        notificationService.deleteMessage(chatId, messageId);
         appointmentService.clearUserState(chatId);
         userSessionService.setRole(chatId, "ADMIN");
         appointmentService.setAdminState(chatId, AdminAppointmentState.ADM_AWAITING_DATE);
-        sendDateSelectionForAdmin(chatId);
+        sendDateSelectionForAdmin(chatId, messageId);
     }
 
     private String getDayName(int dayOfWeek) {
@@ -584,21 +583,15 @@ public class AdminCallbackHandlerImpl implements AdminCallbackHandler {
 
     }
 
-    private void sendDateSelectionForAdmin(Long chatId) {
+    private void sendDateSelectionForAdmin(Long chatId, Integer messageId) {
         LocalDate today = LocalDate.now();
-        List<LocalDate> availableDates = new ArrayList<>();
-        for (int i = 0; i < 14; i++) { // даём больше дней админу
-            LocalDate date = today.plusDays(i);
-            if (appointmentService.isWorkingDay(date)) {
-                List<LocalDateTime> slots = appointmentService.getAvailableTimeSlots(date.atStartOfDay());
-                if (!slots.isEmpty()) {
-                    availableDates.add(date);
-                }
-            }
-        }
+        List<LocalDate> availableDates = appointmentService.getAvailableDates(today, 14);
 
         InlineKeyboardMarkup markup = keyboardFactory.dateSelectionKeyboard(availableDates, UserRole.ADMIN);
-        notificationService.sendOrEditMessage(chatId, null, "📅 Выберите дату для клиента:", markup);
+        notificationService.sendOrEditMessage(chatId, messageId, "📅 Выберите дату для клиента:", markup);
+        if (messageId != null) {
+            appointmentService.setPendingMessageId(chatId, messageId);
+        }
     }
 
     private void showAppointments(Long chatId, Integer messageId,

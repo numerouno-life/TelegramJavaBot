@@ -2,6 +2,8 @@ package ru.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.model.WorkDaysOverride;
@@ -29,8 +31,9 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
 
     // Проверить, рабочий ли день
     @Override
+    @Cacheable(value = "work_day_status", key = "#date")
     public boolean isWorkingDay(LocalDate date) {
-        log.info("isWorkDay");
+        log.info("isWorkDay: {}", date);
         // Проверяем исключения
         var override = workDaysOverrideRepository.findByDate(date);
         if (override.isPresent()) {
@@ -43,6 +46,7 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
     }
 
     // Получить рабочее время для даты
+    @Cacheable(value = "work_time_date", key = "#date")
     public LocalTime[] getWorkTimeForDate(LocalDate date) {
         var override = workDaysOverrideRepository.findByDate(date);
         if (override.isPresent() && override.get().getIsWorkingDay()) {
@@ -97,6 +101,7 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
 
     @Transactional
     @Override
+    @CacheEvict(value = {"work_day_status", "work_time_date", "work_schedule_all"}, allEntries = true)
     public void updateWorkDay(Integer dayOfWeek, LocalTime startTime, LocalTime endTime, boolean isWorking) {
         var schedule = workScheduleRepository.findByDayOfWeek(dayOfWeek);
         if (schedule == null) {
@@ -115,6 +120,7 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
     // Установить исключение (например, выходной или сокращённый день)
     @Transactional
     @Override
+    @CacheEvict(value = {"work_day_status", "work_time_date", "work_schedule_all"}, allEntries = true)
     public void setWorkDayOverride(LocalDate date, LocalTime start, LocalTime end,
                                    boolean isWorking, String reason) {
         var override = workDaysOverrideRepository.findByDate(date).orElse(null);
@@ -138,18 +144,21 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
 
     @Transactional(readOnly = true)
     @Override
+    @Cacheable(value = "work_schedule_all")
     public List<WorkSchedule> getAllWorkSchedules() {
         return workScheduleRepository.findAllByOrderByDayOfWeekAsc();
     }
 
     @Transactional(readOnly = true)
     @Override
+    @Cacheable(value = "work_schedule_all")
     public List<WorkSchedule> getAllWorkSchedule() {
         return workScheduleRepository.findAll();
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = {"work_day_status", "work_time_date", "work_schedule_all"}, allEntries = true)
     public void deleteOverrideByDate(LocalDate date) {
         workDaysOverrideRepository.deleteByDate(date);
     }

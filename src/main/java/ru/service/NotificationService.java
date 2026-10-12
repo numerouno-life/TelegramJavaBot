@@ -14,6 +14,8 @@ public interface NotificationService {
 
     void sendContacts(Long chatId);
 
+    void sendContacts(Long chatId, Integer messageId);
+
     void sendMainMenu(Long chatId, String text);
 
     void sendAdminMenu(Long chatId, String text);
