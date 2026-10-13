@@ -26,7 +26,7 @@ public class UpdateConsumer implements LongPollingSingleThreadUpdateConsumer {
     public void consume(Update update) {
         executor.submit(() -> {
             try {
-                log.info("Received update: {}", update);
+                log.debug("Received update: {}", update);
 
                 if (update.hasMessage() && update.getMessage().hasText()) {
                     textMessageHandler.handleTextMessage(update);
