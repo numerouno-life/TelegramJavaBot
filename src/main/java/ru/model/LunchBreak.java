@@ -32,6 +32,7 @@ public class LunchBreak {
     @Column(name = "end_time")
     LocalTime endTime;
 
+    @Builder.Default
     @Column(name = "is_active", nullable = false)
     Boolean isActive = true;
 }

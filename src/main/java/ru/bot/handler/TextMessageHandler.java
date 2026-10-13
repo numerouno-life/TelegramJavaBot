@@ -19,7 +19,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -68,6 +67,15 @@ public class TextMessageHandler {
             return;
         }
 
+        if (CMD_USER_MENU.equalsIgnoreCase(text)) {
+            userSessionService.setRole(chatId, "USER");
+            appointmentService.clearAdminState(chatId);
+            userSessionService.clearPendingName(chatId);
+            appointmentService.clearPendingDate(chatId);
+            notificationService.sendMainMenu(chatId, "Выберите действие:");
+            return;
+        }
+
         PaymentState paymentState = paymentSessionService.getPaymentState(chatId);
         if (paymentState != null) {
             handlePaymentState(chatId, text, paymentState);
@@ -80,6 +88,10 @@ public class TextMessageHandler {
 
         // Обработка админа
         if ("ADMIN".equals(role)) {
+            if (adminState == null) {
+                notificationService.sendAdminMenu(chatId, "🔐 *Админ-панель*");
+                return;
+            }
             log.debug("👑 Admin mode: chatId={}, adminState={}", chatId, adminState);
             switch (adminState) {
                 case ADM_AWAITING_NAME -> handleUserName(chatId, text, message.getMessageId());
@@ -390,7 +402,6 @@ public class TextMessageHandler {
             // Завершаем сессию
             appointmentService.clearUserState(chatId);
             appointmentService.clearAdminState(chatId);
-            userSessionService.clearRole(chatId);
             userSessionService.clearPendingName(chatId);
             appointmentService.clearPendingDate(chatId);
 
