@@ -152,4 +152,28 @@ public class UserServiceImpl implements UserService {
                     return new EntityNotFoundException("Пользователь c id " + telegramId + " не найден");
                 });
     }
+
+    @Override
+    @Transactional
+    @org.springframework.cache.annotation.CacheEvict(value = "user_admin", allEntries = true)
+    public User updateRole(Long id, UserRole newRole) {
+        User user = userRepository.findByTelegramId(id)
+                .or(() -> userRepository.findById(id))
+                .orElseThrow(() -> new EntityNotFoundException("Пользователь c id " + id + " не найден"));
+        log.info("Смена роли пользователя id={}: {} → {}", id, user.getRole(), newRole);
+        user.setRole(newRole);
+        return userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    @org.springframework.cache.annotation.CacheEvict(value = "user_blocked", allEntries = true)
+    public User updateBlockStatus(Long id, boolean blocked) {
+        User user = userRepository.findByTelegramId(id)
+                .or(() -> userRepository.findById(id))
+                .orElseThrow(() -> new EntityNotFoundException("Пользователь c id " + id + " не найден"));
+        log.info("Изменение блокировки пользователя id={}: {} → {}", id, user.getIsBlocked(), blocked);
+        user.setIsBlocked(blocked);
+        return userRepository.save(user);
+    }
 }

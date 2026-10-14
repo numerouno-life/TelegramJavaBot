@@ -63,18 +63,70 @@
 ----
 
 ## ⚙️ Настройка перед запуском
-1. Откройте файл `.env` в корне проекта.
-2. Впишите свои данные:
+1. Создайте файл `.env` в корне проекта на основе [`.env.example`](.env.example):
    ```env
-   BOT_TOKEN=ваш_бот_токен_здесь
-   BOT_NAME=ваше_имя_бота
+   BOT_NAME=your_bot_name
+   BOT_TOKEN=your_bot_token_from_botfather
+   JWT_SECRET=generate_with_openssl_rand_hex_32
+   MINI_APP_URL=
+   MINI_APP_ORIGIN=http://localhost:18081
+   ```
 
 ### 🛰 Развёртывание (Docker Compose)
-Запуск:
+Запуск всех сервисов (бэкенд, база данных, Redis, Mini App):
+```bash
+docker compose up -d --build
+```
 
-* Соберите JAR: mvn clean package;
-* Собрать образы: docker compose build
-* Запустите контейнеры: docker compose up -d.
 ---
 
-Бот не доделан до своей финальной версии. Возможно в скором времени появится доп функционал
+### 📱 Telegram Mini App (Локальное тестирование в браузере)
+Вы можете протестировать полный флоу работы Mini App (`авторизация Telegram → выпуск JWT → запросы к REST API`) локально в браузере без Telegram и без туннелей:
+
+1. Сгенерируйте валидную строку `initData` с помощью скрипта (передав `BOT_TOKEN` и `telegram_id`):
+   ```bash
+   python3 scripts/gen_init_data.py "$BOT_TOKEN" 719564670
+   ```
+2. Откройте полученную ссылку в браузере:
+   ```
+   http://localhost:18081/?devInitData=<полученная_строка>
+   ```
+Приложение передаст `initData` на бэкенд (`POST /api/auth/telegram`), бэкенд проверит подпись HMAC-SHA256, авторизует пользователя и выпустит JWT, после чего откроется полнофункциональный интерфейс.
+
+---
+
+### 🌐 Cloudflared (dev-туннель для тестирования в реальном Telegram)
+
+Для открытия Mini App внутри реального клиента Telegram (iOS, Android, Desktop) требуется публичный HTTPS-адрес. В проект встроен бесплатный Cloudflare Quick Tunnel (без регистрации и покупки доменов):
+
+1. **Запустите сервис туннеля:**
+   ```bash
+   docker compose up -d cloudflared
+   ```
+
+2. **Получите сгенерированный URL:**
+   ```bash
+   docker logs cloudflared 2>&1 | grep trycloudflare
+   ```
+   *Пример вывода: `https://xxxx-xxxx-xxxx.trycloudflare.com`*
+
+3. **Скопируйте полученный URL в файл `.env`:**
+   ```env
+   MINI_APP_URL=https://xxxx-xxxx-xxxx.trycloudflare.com
+   MINI_APP_ORIGIN=https://xxxx-xxxx-xxxx.trycloudflare.com
+   ```
+   > ⚠️ **Важно:** Значение `MINI_APP_ORIGIN` обязательно должно совпадать с `MINI_APP_URL`, иначе CORS заблокирует запросы фронтенда к бэкенду из реального Telegram!
+   > ⚠️ **Внимание:** URL в режиме Quick Tunnel меняется при каждом перезапуске контейнера `cloudflared`.
+
+4. **Перезапустите бэкенд для применения нового URL:**
+   ```bash
+   docker compose restart barber-server
+   ```
+
+5. **Настройте кнопку в Telegram через [@BotFather](https://t.me/BotFather):**
+   - Отправьте команду `/mybots`
+   - Выберите вашего бота → **Bot Settings** → **Menu Button** → **Configure menu button**
+   - Отправьте полученный URL (например, `https://xxxx-xxxx-xxxx.trycloudflare.com`)
+   - Укажите название кнопки (например, `Записаться`)
+
+

@@ -74,4 +74,10 @@ public interface AppointmentService {
     Appointment getLastAppointmentWithin6Days(Long chatId, LocalDateTime dateTime);
 
     Optional<Appointment> getLastAppointment(Long chatId);
+
+    /**
+     * Получить все записи за указанную дату (для админки Mini App).
+     * Включает все статусы, сортировка по времени.
+     */
+    List<Appointment> getAppointmentsByDate(LocalDate date);
 }

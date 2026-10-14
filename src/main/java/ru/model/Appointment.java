@@ -3,6 +3,7 @@ package ru.model;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import ru.model.enums.ServiceType;
 import ru.model.enums.StatusAppointment;
 
 import java.time.LocalDateTime;
@@ -33,6 +34,11 @@ public class Appointment {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     StatusAppointment status;
+
+    // Тип услуги — nullable, бот-флоу создаёт записи без этого поля
+    @Enumerated(EnumType.STRING)
+    @Column(name = "service_type", length = 50)
+    ServiceType serviceType;
 
     @Column(name = "created_at", updatable = false, insertable = false)
     LocalDateTime createdAt;

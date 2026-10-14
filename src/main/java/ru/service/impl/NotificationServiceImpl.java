@@ -12,6 +12,7 @@ import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
+import ru.miniapp.config.MiniAppProperties;
 import ru.service.NotificationService;
 import ru.util.AdminKeyboard;
 import ru.util.KeyboardFactory;
@@ -26,6 +27,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final TelegramClient telegramClient;
     private final KeyboardFactory keyboardFactory;
     private final AdminKeyboard adminKeyboard;
+    private final MiniAppProperties miniAppProperties;
 
     @Override
     public void sendMessage(Long chatId, String text) {
@@ -122,7 +124,13 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public void sendMainMenu(Long chatId, String text) {
-        sendMessage(chatId, text, keyboardFactory.mainMenu());
+        // Если задан URL Mini App — добавляем кнопку открытия приложения
+        String miniAppUrl = miniAppProperties.getUrl();
+        if (miniAppUrl != null && !miniAppUrl.isBlank()) {
+            sendMessage(chatId, text, keyboardFactory.mainMenuWithMiniApp(miniAppUrl));
+        } else {
+            sendMessage(chatId, text, keyboardFactory.mainMenu());
+        }
     }
 
     @Override
