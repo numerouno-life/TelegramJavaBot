@@ -34,6 +34,27 @@ public class KeyboardFactory {
         ));
     }
 
+    /**
+     * Главное меню с кнопкой открытия Mini App.
+     * Кнопка WebApp открывает приложение прямо в Telegram.
+     *
+     * @param miniAppUrl URL Mini App (из env MINI_APP_URL)
+     */
+    public InlineKeyboardMarkup mainMenuWithMiniApp(String miniAppUrl) {
+        InlineKeyboardButton webAppButton = InlineKeyboardButton.builder()
+                .text("🌐 Открыть приложение")
+                .webApp(new org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo(miniAppUrl))
+                .build();
+
+        return new InlineKeyboardMarkup(List.of(
+                row(CMD_BOOK, CallbackType.BOOK_APPOINTMENT.getPrefix()),
+                row(CMD_MY_APPOINTMENTS, CallbackType.MY_APPOINTMENTS.getPrefix()),
+                row(CMD_HISTORY, CallbackType.HISTORY.getPrefix()),
+                row(CMD_CONTACTS, CallbackType.CONTACTS.getPrefix()),
+                new InlineKeyboardRow(webAppButton)
+        ));
+    }
+
     // Кнопка "Назад"
     public InlineKeyboardMarkup backButton(String text, String callbackData) {
         return new InlineKeyboardMarkup(List.of(row(text, callbackData)));

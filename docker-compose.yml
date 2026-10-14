@@ -55,6 +55,27 @@ services:
     networks:
       - app-network
 
+  barber-mini-app:
+    build: ./mini-app
+    container_name: barber-mini-app
+    ports:
+      - "18081:80"
+    depends_on:
+      - barber-server
+    restart: always
+    networks:
+      - app-network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel --no-autoupdate --protocol http2 --url http://barber-mini-app:80
+    depends_on:
+      - barber-mini-app
+    restart: unless-stopped
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge

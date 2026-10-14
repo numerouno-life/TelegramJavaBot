@@ -451,4 +451,13 @@ public class AppointmentServiceImpl implements AppointmentService {
                 );
     }
 
+    // Получить все записи за дату (для Admin API)
+    @Override
+    @Transactional(readOnly = true)
+    public List<Appointment> getAppointmentsByDate(LocalDate date) {
+        LocalDateTime dayStart = date.atStartOfDay();
+        LocalDateTime dayEnd = date.atTime(23, 59, 59);
+        return appointmentRepository.findByDateTimeBetweenOrderByDateTimeAsc(dayStart, dayEnd);
+    }
+
 }
