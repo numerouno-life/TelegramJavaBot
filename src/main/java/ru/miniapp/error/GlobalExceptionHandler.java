@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
  * Возвращает единый формат ErrorResponse для всех /api/** эндпоинтов.
  */
 @Slf4j
+@org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackages = "ru.miniapp.controller")
 public class GlobalExceptionHandler {
 

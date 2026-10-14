@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @Slf4j
+@org.springframework.core.annotation.Order(org.springframework.core.Ordered.LOWEST_PRECEDENCE)
 @RestControllerAdvice
 public class ErrorHandler {
 
